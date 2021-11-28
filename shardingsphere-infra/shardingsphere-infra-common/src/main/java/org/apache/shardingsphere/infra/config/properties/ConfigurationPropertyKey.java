@@ -88,11 +88,6 @@ public enum ConfigurationPropertyKey implements TypedPropertyKey {
     LOCK_WAIT_TIMEOUT_MILLISECONDS("lock-wait-timeout-milliseconds", String.valueOf(50000L), long.class),
     
     /**
-     * Whether enable lock.
-     */
-    LOCK_ENABLED("lock-enabled", String.valueOf(Boolean.FALSE), boolean.class),
-    
-    /**
      * Proxy backend query fetch size. A larger value may increase the memory usage of ShardingSphere Proxy.
      * The default value is -1, which means set the minimum value for different JDBC drivers.
      */
@@ -127,7 +122,22 @@ public enum ConfigurationPropertyKey implements TypedPropertyKey {
     /**
      * Whether enable sql federation.
      */
-    SQL_FEDERATION_ENABLED("sql-federation-enabled", String.valueOf(Boolean.FALSE), boolean.class);
+    SQL_FEDERATION_ENABLED("sql-federation-enabled", String.valueOf(Boolean.FALSE), boolean.class),
+
+    /**
+     * SQL Statement cache initial capacity.
+     */
+    SQL_CACHE_INITIAL_CAPACITY("sql-cache-initial-capacity", String.valueOf(2000), int.class),
+
+    /**
+     * SQL statement cache maximum size.
+     */
+    SQL_CACHE_MAXIMUM_SIZE("sql-cache-maximum-size", String.valueOf(65535L), long.class),
+
+    /**
+     * SQL statement cache concurrency level.
+     */
+    SQL_CACHE_CONCURRENCY_LEVEL("sql-cache-concurrency-level", String.valueOf(4), int.class);
     
     private final String key;
     

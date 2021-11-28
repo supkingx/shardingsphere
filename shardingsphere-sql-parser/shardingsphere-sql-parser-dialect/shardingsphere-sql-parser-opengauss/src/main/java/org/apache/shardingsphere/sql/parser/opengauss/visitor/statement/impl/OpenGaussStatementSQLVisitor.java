@@ -31,6 +31,7 @@ import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AEx
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AexprConstContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AliasClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AscDescContext;
+import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AssignmentContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AttrNameContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.BExprContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.CExprContext;
@@ -67,6 +68,7 @@ import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.Joi
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.LimitClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.NameListContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.NumberLiteralsContext;
+import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.OptOnDuplicateKeyContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.OwnerContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.ParameterMarkerContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.QualifiedNameContext;
@@ -97,10 +99,9 @@ import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.Val
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.WhereClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.WhereOrCurrentClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.WindowClauseContext;
-import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.OptOnDuplicateKeyContext;
-import org.apache.shardingsphere.sql.parser.autogen.OpenGaussStatementParser.AssignmentContext;
 import org.apache.shardingsphere.sql.parser.sql.common.constant.AggregationType;
 import org.apache.shardingsphere.sql.parser.sql.common.constant.OrderDirection;
+import org.apache.shardingsphere.sql.parser.sql.common.constant.UnionType;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.ddl.constraint.ConstraintSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.ddl.index.IndexSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.assignment.AssignmentSegment;
@@ -114,6 +115,7 @@ import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BetweenE
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BinaryOperationExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExistsSubqueryExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.FunctionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.InExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ListExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.complex.CommonExpressionSegment;
@@ -142,6 +144,7 @@ import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.pagination.li
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.predicate.HavingSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.predicate.LockSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.predicate.WhereSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.union.UnionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.AliasAvailable;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.AliasSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.DataTypeLengthSegment;
@@ -345,8 +348,22 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
     
     @Override
     public ASTNode visitFuncExpr(final FuncExprContext ctx) {
+        if (null != ctx.functionExprCommonSubexpr()) {
+            return visit(ctx.functionExprCommonSubexpr());
+        }
         calculateParameterCount(getTargetRuleContextFromParseTree(ctx, CExprContext.class));
-        return new ExpressionProjectionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), getOriginalText(ctx));
+        // TODO replace aggregation segment
+        String aggregationType = ctx.funcApplication().funcName().getText();
+        if (AggregationType.isAggregationType(aggregationType)) {
+            return createAggregationSegment(ctx.funcApplication(), aggregationType);
+        }
+        return new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.funcApplication().funcName().getText(), getOriginalText(ctx));
+    }
+    
+    @Override
+    public ASTNode visitFunctionExprCommonSubexpr(final FunctionExprCommonSubexprContext ctx) {
+        calculateParameterCount(getTargetRuleContextFromParseTree(ctx, CExprContext.class));
+        return new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.getChild(0).getText(), getOriginalText(ctx));
     }
     
     private <T extends ParseTree> Collection<T> getTargetRuleContextFromParseTree(final ParseTree parseTree, final Class<? extends T> clazz) {
@@ -460,25 +477,6 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
         return new LiteralExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText());
     }
     
-    protected ProjectionSegment generateProjectFromFuncExpr(final FuncExprContext ctx) {
-        if (null != ctx.funcApplication()) {
-            return generateProjectFromFuncApplication(ctx.funcApplication());
-        }
-        return generateProjectFromFunctionExprCommonSubexpr(ctx.functionExprCommonSubexpr());
-    }
-    
-    private ProjectionSegment generateProjectFromFuncApplication(final FuncApplicationContext ctx) {
-        String aggregationType = ctx.funcName().getText();
-        if (AggregationType.isAggregationType(aggregationType)) {
-            return createAggregationSegment(ctx, aggregationType);
-        }
-        return new ExpressionProjectionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), getOriginalText(ctx));
-    }
-    
-    private ProjectionSegment generateProjectFromFunctionExprCommonSubexpr(final FunctionExprCommonSubexprContext ctx) {
-        return new ExpressionProjectionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), getOriginalText(ctx));
-    }
-    
     private ProjectionSegment createAggregationSegment(final FuncApplicationContext ctx, final String aggregationType) {
         AggregationType type = AggregationType.valueOf(aggregationType.toUpperCase());
         String innerExpression = ctx.start.getInputStream().getText(new Interval(ctx.LP_().getSymbol().getStartIndex(), ctx.stop.getStopIndex()));
@@ -522,16 +520,20 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
     @Override
     public final ASTNode visitSortby(final SortbyContext ctx) {
         OrderDirection orderDirection = null != ctx.ascDesc() ? generateOrderDirection(ctx.ascDesc()) : OrderDirection.ASC;
-        ASTNode astNode = visit(ctx.aExpr());
-        if (astNode instanceof ColumnSegment) {
-            ColumnSegment column = (ColumnSegment) astNode;
+        ASTNode expr = visit(ctx.aExpr());
+        if (expr instanceof ColumnSegment) {
+            ColumnSegment column = (ColumnSegment) expr;
             return new ColumnOrderByItemSegment(column, orderDirection);
         }
-        if (astNode instanceof LiteralExpressionSegment) {
-            LiteralExpressionSegment index = (LiteralExpressionSegment) astNode;
+        if (expr instanceof LiteralExpressionSegment) {
+            LiteralExpressionSegment index = (LiteralExpressionSegment) expr;
             return new IndexOrderByItemSegment(index.getStartIndex(), index.getStopIndex(), Integer.parseInt(index.getLiterals().toString()), orderDirection);
         }
-        return new ExpressionOrderByItemSegment(ctx.aExpr().getStart().getStartIndex(), ctx.aExpr().getStop().getStopIndex(), ctx.aExpr().getText(), orderDirection);
+        if (expr instanceof ExpressionSegment) {
+            return new ExpressionOrderByItemSegment(ctx.aExpr().getStart().getStartIndex(), 
+                    ctx.aExpr().getStop().getStopIndex(), getOriginalText(ctx.aExpr()), orderDirection, (ExpressionSegment) expr);
+        }
+        return new ExpressionOrderByItemSegment(ctx.aExpr().getStart().getStartIndex(), ctx.aExpr().getStop().getStopIndex(), getOriginalText(ctx.aExpr()), orderDirection);
     }
     
     private OrderDirection generateOrderDirection(final AscDescContext ctx) {
@@ -802,7 +804,30 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
     
     @Override
     public ASTNode visitSelectClauseN(final SelectClauseNContext ctx) {
-        return null == ctx.simpleSelect() ? new OpenGaussSelectStatement() : visit(ctx.simpleSelect());
+        if (null != ctx.simpleSelect()) {
+            return visit(ctx.simpleSelect());
+        } else if (null != ctx.selectClauseN() && !ctx.selectClauseN().isEmpty()) {
+            OpenGaussSelectStatement result = (OpenGaussSelectStatement) visit(ctx.selectClauseN(0));
+            UnionSegment unionSegment = new UnionSegment(getUnionType(ctx), (OpenGaussSelectStatement) visit(ctx.selectClauseN(1)),
+                    ((TerminalNode) ctx.getChild(1)).getSymbol().getStartIndex(), ctx.getStop().getStopIndex());
+            result.getUnionSegments().add(unionSegment);
+            return result;
+        } else {
+            return visit(ctx.selectWithParens());
+        }
+    }
+    
+    private UnionType getUnionType(final SelectClauseNContext ctx) {
+        boolean isDistinct = null == ctx.allOrDistinct() || null != ctx.allOrDistinct().DISTINCT();
+        if (null != ctx.UNION()) {
+            return isDistinct ? UnionType.UNION_DISTINCT : UnionType.UNION_ALL;
+        } else if (null != ctx.INTERSECT()) {
+            return isDistinct ? UnionType.INTERSECT_DISTINCT : UnionType.INTERSECT_ALL;
+        } else if (null != ctx.MINUS()) {
+            return isDistinct ? UnionType.MINUS_DISTINCT : UnionType.MINUS_ALL;
+        } else {
+            return isDistinct ? UnionType.EXCEPT_DISTINCT : UnionType.EXCEPT_ALL;
+        }
     }
     
     @Override
@@ -868,9 +893,9 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
                 return new IndexOrderByItemSegment(index.getStartIndex(), index.getStopIndex(),
                         Integer.parseInt(index.getLiterals().toString()), OrderDirection.ASC);
             }
-            return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.start.getStopIndex(), ctx.getText(), OrderDirection.ASC);
+            return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), OrderDirection.ASC);
         }
-        return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.start.getStopIndex(), ctx.getText(), OrderDirection.ASC);
+        return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), OrderDirection.ASC);
     }
     
     @Override
@@ -902,8 +927,11 @@ public abstract class OpenGaussStatementSQLVisitor extends OpenGaussStatementBas
             if (projection instanceof ColumnSegment) {
                 result = new ColumnProjectionSegment((ColumnSegment) projection);
             }
-            if (null != expr.cExpr().funcExpr()) {
-                result = generateProjectFromFuncExpr(expr.cExpr().funcExpr());
+            if (projection instanceof FunctionSegment) {
+                result = new ExpressionProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(expr), (FunctionSegment) projection);
+            }
+            if (projection instanceof AggregationProjectionSegment) {
+                result = (AggregationProjectionSegment) projection;
             }
             if (projection instanceof SubqueryExpressionSegment) {
                 SubqueryExpressionSegment subqueryExpression = (SubqueryExpressionSegment) projection;

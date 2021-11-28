@@ -10,6 +10,7 @@
 [![Maintainability](https://cloud.quality-gate.com/dashboard/api/badge?projectName=apache_shardingsphere&branchName=master)](https://cloud.quality-gate.com/dashboard/branches/30#overview)
 [![OpenTracing-1.0 Badge](https://img.shields.io/badge/OpenTracing--1.0-enabled-blue.svg)](http://opentracing.io)
 [![Skywalking Tracing](https://img.shields.io/badge/Skywalking%20Tracing-enable-brightgreen.svg)](https://github.com/apache/skywalking)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/5394/badge)](https://bestpractices.coreinfrastructure.org/projects/5394)
 
 [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/ShardingSphere.svg?style=social&label=Follow%20%40ShardingSphere)](https://twitter.com/ShardingSphere)
 [![Slack](https://img.shields.io/badge/%20Slack-ShardingSphere%20Channel-blueviolet)](https://join.slack.com/t/apacheshardingsphere/shared_invite/zt-sbdde7ie-SjDqo9~I4rYcR18bq0SYTg)
@@ -37,15 +38,15 @@ ShardingSphere became an [Apache](https://apache.org/index.html#projects-list) T
 [![EN doc](https://img.shields.io/badge/document-English-blue.svg)](https://shardingsphere.apache.org/document/current/en/overview/)
 [![CN doc](https://img.shields.io/badge/文档-中文版-blue.svg)](https://shardingsphere.apache.org/document/current/cn/overview/)
 
-For full documentation & more details, visit: [https://shardingsphere.apache.org/document/current/en/overview/](https://shardingsphere.apache.org/document/current/en/overview/)
+For full documentation & more details, visit: [Docs](https://shardingsphere.apache.org/document/current/en/overview/)
 
 ## Contribution: 
 
-For guides on how to get started and setup your environment, contributor & committer guides, visit: [https://shardingsphere.apache.org/community/en/contribute/](https://shardingsphere.apache.org/community/en/contribute/)
+For guides on how to get started and setup your environment, contributor & committer guides, visit: [Contribution Guidelines](https://shardingsphere.apache.org/community/en/contribute/)
 
 ## Community & Support:
 
-:link: [Mailing List](dev@shardingsphere.apache.org). Best for: Apache community updates, releases, changes.
+:link: [Mailing List](https://shardingsphere.apache.org/community/en/contribute/subscribe/). Best for: Apache community updates, releases, changes.
 
 :link: [GitHub Issues](https://github.com/apache/shardingsphere/issues). Best for: larger systemic questions/bug reports or anything development related.
 
@@ -57,11 +58,23 @@ For guides on how to get started and setup your environment, contributor & commi
 
 ## Status:
 
-:white_check_mark: Version 5.0.0-beta: released, stable enough & anyone can sign up :tada:
+:white_check_mark: Version 5.0.0: released :tada:
 
-:soon: Version 5.0.0-RC1
+🔗 For the release notes, follow this link to the relevant [GitHub page](https://github.com/apache/shardingsphere/blob/master/RELEASE-NOTES.md).
 
-We are currently working towards our 5.0.0-RC1 milestone. Keep an eye on the [milestones page](https://github.com/apache/shardingsphere/milestones) of this repo to stay up to date.
+
+:soon: Version 5.0.1
+
+We are currently working towards our 5.0.1 milestone. Keep an eye on the [milestones page](https://github.com/apache/shardingsphere/milestones) of this repo to stay up to date.
+
+
+ ## Nightly Builds:
+
+ A nightly build of ShardingSphere from the latest master branch is available. The package is updated daily and is [available here](http://117.48.121.24:8080).
+
+ #### ‼️ Notice: 
+
+ Use this nightly build at your own risk! The branch is not always fully tested. The nightly build may contain bugs, and there may be new features added which may cause problems with your environment. 
 
 ## How it Works:
 

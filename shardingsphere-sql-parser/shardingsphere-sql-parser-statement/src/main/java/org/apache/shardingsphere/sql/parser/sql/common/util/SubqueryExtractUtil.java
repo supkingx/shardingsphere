@@ -19,6 +19,7 @@ package org.apache.shardingsphere.sql.parser.sql.common.util;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.apache.shardingsphere.sql.parser.sql.common.constant.SubqueryType;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BetweenExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BinaryOperationExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExpressionSegment;
@@ -59,7 +60,7 @@ public final class SubqueryExtractUtil {
         }
         return result;
     }
-
+    
     private static Collection<SubquerySegment> getSubquerySegmentsFromProjections(final ProjectionsSegment projections) {
         if (null == projections || projections.getProjections().isEmpty()) {
             return Collections.emptyList();
@@ -70,6 +71,7 @@ public final class SubqueryExtractUtil {
                 continue;
             }
             SubquerySegment subquery = ((SubqueryProjectionSegment) each).getSubquery();
+            subquery.setSubqueryType(SubqueryType.PROJECTION_SUBQUERY);
             result.add(subquery);
             result.addAll(getSubquerySegments(subquery.getSelect()));
         }
@@ -83,6 +85,7 @@ public final class SubqueryExtractUtil {
         Collection<SubquerySegment> result = new LinkedList<>();
         if (tableSegment instanceof SubqueryTableSegment) {
             SubquerySegment subquery = ((SubqueryTableSegment) tableSegment).getSubquery();
+            subquery.setSubqueryType(SubqueryType.TABLE_SUBQUERY);
             result.add(subquery);
             result.addAll(getSubquerySegments(subquery.getSelect()));
         }
@@ -97,6 +100,7 @@ public final class SubqueryExtractUtil {
         Collection<SubquerySegment> result = new LinkedList<>();
         if (expressionSegment instanceof SubqueryExpressionSegment) {
             SubquerySegment subquery = ((SubqueryExpressionSegment) expressionSegment).getSubquery();
+            subquery.setSubqueryType(SubqueryType.PREDICATE_SUBQUERY);
             result.add(subquery);
             result.addAll(getSubquerySegments(subquery.getSelect()));
         }

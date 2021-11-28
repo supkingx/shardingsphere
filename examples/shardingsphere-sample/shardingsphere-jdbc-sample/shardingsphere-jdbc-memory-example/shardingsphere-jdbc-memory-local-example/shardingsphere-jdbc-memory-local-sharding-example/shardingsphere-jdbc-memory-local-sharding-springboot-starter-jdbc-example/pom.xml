@@ -22,18 +22,13 @@
     <parent>
         <artifactId>shardingsphere-jdbc-memory-local-sharding-example</artifactId>
         <groupId>org.apache.shardingsphere.example</groupId>
-        <version>5.0.0-RC1-SNAPSHOT</version>
+        <version>5.0.1-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>shardingsphere-jdbc-memory-local-sharding-springboot-starter-jdbc-example</artifactId>
     <name>${project.artifactId}</name>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.shardingsphere.example</groupId>
-            <artifactId>example-raw-jdbc</artifactId>
-            <version>${project.version}</version>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot</artifactId>

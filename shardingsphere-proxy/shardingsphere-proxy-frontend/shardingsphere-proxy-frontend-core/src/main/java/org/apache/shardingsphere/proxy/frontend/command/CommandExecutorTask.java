@@ -29,6 +29,7 @@ import org.apache.shardingsphere.db.protocol.payload.PacketPayload;
 import org.apache.shardingsphere.proxy.backend.communication.SQLStatementSchemaHolder;
 import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.BackendConnection;
 import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.ConnectionStatus;
+import org.apache.shardingsphere.proxy.backend.communication.jdbc.transaction.BackendTransactionManager;
 import org.apache.shardingsphere.proxy.frontend.command.executor.CommandExecutor;
 import org.apache.shardingsphere.proxy.frontend.command.executor.QueryCommandExecutor;
 import org.apache.shardingsphere.proxy.frontend.exception.ExpectedExceptions;
@@ -69,6 +70,10 @@ public final class CommandExecutorTask implements Runnable {
                 connectionStatus.waitUntilConnectionRelease();
                 connectionStatus.switchToUsing();
             }
+            if (!backendConnection.isAutoCommit() && !backendConnection.getTransactionStatus().isInTransaction()) {
+                BackendTransactionManager transactionManager = new BackendTransactionManager(backendConnection);
+                transactionManager.begin();
+            }
             isNeedFlush = executeCommand(context, payload, backendConnection);
             // CHECKSTYLE:OFF
         } catch (final Exception ex) {
@@ -78,13 +83,13 @@ public final class CommandExecutorTask implements Runnable {
             // TODO optimize SQLStatementSchemaHolder
             SQLStatementSchemaHolder.remove();
             Collection<SQLException> exceptions = closeExecutionResources();
-            if (isNeedFlush) {
-                context.flush();
-            }
             if (!backendConnection.getTransactionStatus().isInConnectionHeldTransaction()) {
                 exceptions.addAll(backendConnection.closeDatabaseCommunicationEngines(true));
                 exceptions.addAll(backendConnection.closeConnections(false));
                 backendConnection.getConnectionStatus().switchToReleased();
+            }
+            if (isNeedFlush) {
+                context.flush();
             }
             processClosedExceptions(exceptions);
         }

@@ -31,6 +31,14 @@ ALL
     : A L L
     ;
 
+CREATE
+    : C R E A T E
+    ;
+
+DEFAULT
+    : D E F A U L T
+    ;
+
 ALTER
     : A L T E R
     ;
@@ -153,4 +161,12 @@ RULES
     
 RULE
     : R U L E
+    ;
+    
+REFRESH
+    : R E F R E S H
+    ;
+    
+METADATA
+    : M E T A D A T A
     ;

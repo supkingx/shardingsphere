@@ -36,14 +36,22 @@ public final class JDBCGenerator extends ExampleGenerateEngine {
         
         UN_NAME_TEMPLATE_MAP.put("entity/Order", "entity/Order.java");
         UN_NAME_TEMPLATE_MAP.put("entity/OrderItem", "entity/OrderItem.java");
+        UN_NAME_TEMPLATE_MAP.put("entity/User", "entity/User.java");
+        
+        RESOURCE_TEMPLATE_MAP.put("log/logback", "logback.xml");
     }
 
     public JDBCGenerator() {
         super(RENAME_TEMPLATE_MAP, UN_NAME_TEMPLATE_MAP, RESOURCE_TEMPLATE_MAP);
     }
-
+    
+    @Override
+    protected String getGenerator() {
+        return "jdbc";
+    }
+    
     public static void main(String[] args) {
         JDBCGenerator generator = new JDBCGenerator();
-        generator.exec("/template/jdbc/data-model.yaml");
+        generator.exec();
     }
 }

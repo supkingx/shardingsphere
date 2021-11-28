@@ -1,7 +1,7 @@
 +++
-pre = "<b>4.6. </b>"
+pre = "<b>4.7. </b>"
 title = "Scaling"
-weight = 6
+weight = 7
 chapter = true
 +++
 
@@ -26,7 +26,7 @@ ShardingSphere-Scaling is a common solution for migrating or scaling data.
 
 ## Goal
 
-The main design goal of ShardingSphere-Scaling is providing common solution which can support kinds of sharding algorithm and reduce the impact as much as possible during scaling.
+**The main design goal of ShardingSphere-Scaling is providing common solution which can support kinds of sharding algorithm and reduce the impact as much as possible during scaling.**
 
 ## Status
 

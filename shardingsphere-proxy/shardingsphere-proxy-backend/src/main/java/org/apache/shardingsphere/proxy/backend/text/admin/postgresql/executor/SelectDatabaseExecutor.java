@@ -35,11 +35,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Schemata query executor, used to query the schemata table.
+ * Database metadata query executor, used to query the schemata database.
  */
 public final class SelectDatabaseExecutor extends DefaultDatabaseMetadataExecutor {
     
     private static final String DATABASE_NAME = "databasename";
+    
+    private static final String DATNAME = "datname";
+    
+    private static final String NAME = "name";
     
     private final Set<String> columnNames = new LinkedHashSet<>();
     
@@ -47,16 +51,31 @@ public final class SelectDatabaseExecutor extends DefaultDatabaseMetadataExecuto
     
     private String databaseNameAlias = DATABASE_NAME;
     
+    private boolean isQueryDatabase;
+    
     public SelectDatabaseExecutor(final SelectStatement sqlStatement, final String sql) {
         super(sql);
         this.sqlStatement = sqlStatement;
     }
     
     @Override
-    protected void addDefaultRow(final LinkedList<Map<String, Object>> rows) {
+    protected void createPreProcessing() {
+        removeDuplicatedRow();
+        addDefaultRow();
+    }
+    
+    private void addDefaultRow() {
         LinkedList<String> schemaWithoutDataSource = ProxyContext.getInstance().getAllSchemaNames().stream()
                 .filter(each -> !hasDatasource(each)).collect(Collectors.toCollection(LinkedList::new));
-        schemaWithoutDataSource.forEach(each -> rows.addLast(getDefaultRowData(each)));
+        schemaWithoutDataSource.forEach(each -> getRows().addLast(getDefaultRowData(each)));
+    }
+    
+    private void removeDuplicatedRow() {
+        if (isQueryDatabase) {
+            List<Map<String, Object>> toBeRemovedRow = getRows().stream().collect(Collectors.groupingBy(each -> each.get(databaseNameAlias), Collectors.toCollection(LinkedList::new)))
+                    .values().stream().filter(each -> each.size() > 1).map(LinkedList::getLast).collect(Collectors.toList());
+            toBeRemovedRow.forEach(each -> getRows().remove(each));
+        }
     }
     
     @Override
@@ -70,8 +89,9 @@ public final class SelectDatabaseExecutor extends DefaultDatabaseMetadataExecuto
         buildColumnNames(aliasMap);
         ShardingSphereResource resource = ProxyContext.getInstance().getContextManager().getMetaDataContexts().getMetaData(schemaName).getResource();
         Set<String> catalogs = resource.getDataSources().keySet().stream().map(each -> resource.getDataSourcesMetaData().getDataSourceMetaData(each).getCatalog()).collect(Collectors.toSet());
-        databaseNameAlias = aliasMap.getOrDefault(DATABASE_NAME, "");
+        databaseNameAlias = aliasMap.getOrDefault(DATABASE_NAME, aliasMap.getOrDefault(DATNAME, aliasMap.getOrDefault(NAME, "")));
         String rowValue = rowMap.getOrDefault(databaseNameAlias, "").toString();
+        isQueryDatabase = !rowValue.isEmpty();
         if (catalogs.contains(rowValue)) {
             rowMap.replace(databaseNameAlias, schemaName);
         } else {

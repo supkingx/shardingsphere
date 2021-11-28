@@ -64,6 +64,7 @@ public final class EncryptSQLRewriterParameterizedTest extends AbstractSQLRewrit
         ShardingSphereSchema result = mock(ShardingSphereSchema.class);
         when(result.getAllColumnNames("t_account")).thenReturn(Arrays.asList("account_id", "certificate_number", "password", "amount", "status"));
         when(result.getAllColumnNames("t_account_bak")).thenReturn(Arrays.asList("account_id", "certificate_number", "password", "amount", "status"));
+        when(result.getAllColumnNames("t_account_detail")).thenReturn(Arrays.asList("account_id", "certificate_number", "password", "amount", "status"));
         return result;
     }
     
@@ -71,8 +72,9 @@ public final class EncryptSQLRewriterParameterizedTest extends AbstractSQLRewrit
     protected void mockRules(final Collection<ShardingSphereRule> rules) {
         Optional<SingleTableRule> singleTableRule = rules.stream().filter(each -> each instanceof SingleTableRule).map(each -> (SingleTableRule) each).findFirst();
         if (singleTableRule.isPresent()) {
-            singleTableRule.get().addDataNode("t_account", "encrypt_ds");
-            singleTableRule.get().addDataNode("t_account_bak", "encrypt_ds");
+            singleTableRule.get().put("t_account", "encrypt_ds");
+            singleTableRule.get().put("t_account_bak", "encrypt_ds");
+            singleTableRule.get().put("t_account_detail", "encrypt_ds");
         }
     }
 }

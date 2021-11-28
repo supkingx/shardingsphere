@@ -21,7 +21,7 @@ import lombok.Getter;
 import org.apache.shardingsphere.infra.route.context.RouteContext;
 import org.apache.shardingsphere.shadow.api.shadow.ShadowOperationType;
 import org.apache.shardingsphere.shadow.api.shadow.column.ColumnShadowAlgorithm;
-import org.apache.shardingsphere.shadow.api.shadow.note.NoteShadowAlgorithm;
+import org.apache.shardingsphere.shadow.api.shadow.hint.HintShadowAlgorithm;
 import org.apache.shardingsphere.shadow.condition.ShadowColumnCondition;
 import org.apache.shardingsphere.shadow.condition.ShadowDetermineCondition;
 import org.apache.shardingsphere.shadow.route.engine.ShadowRouteEngine;
@@ -31,6 +31,7 @@ import org.apache.shardingsphere.shadow.spi.ShadowAlgorithm;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.table.SimpleTableSegment;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -55,12 +56,12 @@ public abstract class AbstractShadowDMLStatementRouteEngine implements ShadowRou
             return Optional.of(shadowRule.getAllShadowDataSourceMappings());
         }
         ShadowOperationType shadowOperationType = getShadowOperationType();
-        for (String each : relatedShadowTables) {
-            if (isShadowTable(each, shadowRule, shadowOperationType)) {
-                return shadowRule.getRelatedShadowDataSourceMappings(each);
-            }
+        Map<String, String> result = findBySQLComments(relatedShadowTables, shadowRule, shadowOperationType);
+        if (!result.isEmpty()) {
+            return Optional.of(result);
         }
-        return Optional.empty();
+        result = findByShadowColumn(relatedShadowTables, shadowRule, shadowOperationType);
+        return result.isEmpty() ? Optional.empty() : Optional.of(result);
     }
     
     private Collection<String> getRelatedShadowTables(final Collection<SimpleTableSegment> simpleTableSegments, final ShadowRule shadowRule) {
@@ -76,50 +77,83 @@ public abstract class AbstractShadowDMLStatementRouteEngine implements ShadowRou
     
     @SuppressWarnings("unchecked")
     private boolean isMatchDefaultShadowAlgorithm(final ShadowRule shadowRule) {
-        Optional<Collection<String>> sqlNotes = parseSqlNotes();
-        if (!sqlNotes.isPresent()) {
+        Optional<Collection<String>> sqlComments = parseSQLComments();
+        if (!sqlComments.isPresent()) {
             return false;
         }
         Optional<ShadowAlgorithm> defaultShadowAlgorithm = shadowRule.getDefaultShadowAlgorithm();
         if (defaultShadowAlgorithm.isPresent()) {
             ShadowAlgorithm shadowAlgorithm = defaultShadowAlgorithm.get();
-            if (shadowAlgorithm instanceof NoteShadowAlgorithm<?>) {
-                ShadowDetermineCondition shadowDetermineCondition = new ShadowDetermineCondition("", ShadowOperationType.NOTE_MATCH);
-                return isMatchNoteShadowAlgorithm((NoteShadowAlgorithm<Comparable<?>>) shadowAlgorithm, shadowDetermineCondition.initSqlNotes(sqlNotes.get()), shadowRule);
+            if (shadowAlgorithm instanceof HintShadowAlgorithm<?>) {
+                ShadowDetermineCondition shadowDetermineCondition = new ShadowDetermineCondition("", ShadowOperationType.HINT_MATCH);
+                return isMatchHintShadowAlgorithm((HintShadowAlgorithm<Comparable<?>>) shadowAlgorithm, shadowDetermineCondition.initSQLComments(sqlComments.get()), shadowRule);
             }
         }
         return false;
     }
     
-    private boolean isShadowTable(final String tableName, final ShadowRule shadowRule, final ShadowOperationType shadowOperationType) {
-        ShadowDetermineCondition shadowCondition = new ShadowDetermineCondition(tableName, shadowOperationType);
-        if (isContainsShadowInSqlNotes(tableName, shadowRule, shadowCondition)) {
-            return true;
+    private Map<String, String> findBySQLComments(final Collection<String> relatedShadowTables, final ShadowRule shadowRule, final ShadowOperationType shadowOperationType) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String each : relatedShadowTables) {
+            if (isContainsShadowInSQLComments(each, shadowRule, new ShadowDetermineCondition(each, shadowOperationType))) {
+                result.putAll(shadowRule.getRelatedShadowDataSourceMappings(each));
+                return result;
+            }
         }
-        return isContainsShadowInColumns(tableName, shadowRule, shadowCondition);
+        return result;
     }
     
-    private boolean isContainsShadowInSqlNotes(final String tableName, final ShadowRule shadowRule, final ShadowDetermineCondition shadowCondition) {
-        return parseSqlNotes().filter(strings -> shadowRule.getRelatedNoteShadowAlgorithms(tableName)
-                .filter(shadowAlgorithms -> isMatchAnyNoteShadowAlgorithms(shadowAlgorithms, shadowCondition.initSqlNotes(strings), shadowRule)).isPresent()).isPresent();
+    private boolean isContainsShadowInSQLComments(final String tableName, final ShadowRule shadowRule, final ShadowDetermineCondition shadowCondition) {
+        return parseSQLComments().filter(SQLComments -> shadowRule.getRelatedHintShadowAlgorithms(tableName)
+                .filter(shadowAlgorithms -> isMatchAnyHintShadowAlgorithms(shadowAlgorithms, shadowCondition.initSQLComments(SQLComments), shadowRule)).isPresent()).isPresent();
     }
     
-    private boolean isMatchAnyNoteShadowAlgorithms(final Collection<NoteShadowAlgorithm<Comparable<?>>> shadowAlgorithms, final ShadowDetermineCondition shadowCondition, final ShadowRule shadowRule) {
-        for (NoteShadowAlgorithm<Comparable<?>> each : shadowAlgorithms) {
-            if (isMatchNoteShadowAlgorithm(each, shadowCondition, shadowRule)) {
+    private boolean isMatchAnyHintShadowAlgorithms(final Collection<HintShadowAlgorithm<Comparable<?>>> shadowAlgorithms, final ShadowDetermineCondition shadowCondition, final ShadowRule shadowRule) {
+        for (HintShadowAlgorithm<Comparable<?>> each : shadowAlgorithms) {
+            if (isMatchHintShadowAlgorithm(each, shadowCondition, shadowRule)) {
                 return true;
             }
         }
         return false;
     }
     
-    private boolean isMatchNoteShadowAlgorithm(final NoteShadowAlgorithm<Comparable<?>> noteShadowAlgorithm, final ShadowDetermineCondition shadowCondition, final ShadowRule shadowRule) {
-        return ShadowDeterminerFactory.newInstance(noteShadowAlgorithm).isShadow(shadowCondition, shadowRule);
+    private boolean isMatchHintShadowAlgorithm(final HintShadowAlgorithm<Comparable<?>> hintShadowAlgorithm, final ShadowDetermineCondition shadowCondition, final ShadowRule shadowRule) {
+        return ShadowDeterminerFactory.newInstance(hintShadowAlgorithm).isShadow(shadowCondition, shadowRule);
     }
     
-    private boolean isContainsShadowInColumns(final String tableName, final ShadowRule shadowRule, final ShadowDetermineCondition shadowCondition) {
-        return shadowRule.getRelatedColumnShadowAlgorithms(tableName, shadowCondition.getShadowOperationType()).filter(shadowAlgorithms -> parseShadowColumnConditions()
-                .filter(columnConditions -> isMatchAnyColumnShadowAlgorithms(shadowAlgorithms, shadowCondition.initShadowColumnCondition(columnConditions), shadowRule)).isPresent()).isPresent();
+    private Map<String, String> findByShadowColumn(final Collection<String> relatedShadowTables, final ShadowRule shadowRule, final ShadowOperationType shadowOperationType) {
+        Map<String, String> result = new LinkedHashMap<>();
+        Iterator<Optional<ShadowColumnCondition>> iterator = getShadowColumnConditionIterator();
+        while (iterator.hasNext()) {
+            Optional<ShadowColumnCondition> next = iterator.next();
+            if (!next.isPresent()) {
+                continue;
+            }
+            Optional<String> shadowTable = findShadowTableByShadowColumn(relatedShadowTables, shadowRule, next.get(), shadowOperationType);
+            if (!shadowTable.isPresent()) {
+                continue;
+            }
+            result.putAll(shadowRule.getRelatedShadowDataSourceMappings(shadowTable.get()));
+            return result;
+        }
+        return result;
+    }
+    
+    private Optional<String> findShadowTableByShadowColumn(final Collection<String> relatedShadowTables, final ShadowRule shadowRule, final ShadowColumnCondition shadowColumnCondition,
+                                                           final ShadowOperationType shadowOperationType) {
+        ShadowDetermineCondition shadowDetermineCondition;
+        for (String each : relatedShadowTables) {
+            shadowDetermineCondition = new ShadowDetermineCondition(each, shadowOperationType);
+            if (isContainsShadowInColumn(each, shadowRule, shadowDetermineCondition.initShadowColumnCondition(shadowColumnCondition))) {
+                return Optional.of(each);
+            }
+        }
+        return Optional.empty();
+    }
+    
+    private boolean isContainsShadowInColumn(final String tableName, final ShadowRule shadowRule, final ShadowDetermineCondition shadowCondition) {
+        Optional<Collection<ColumnShadowAlgorithm<Comparable<?>>>> relatedColumnShadowAlgorithms = shadowRule.getRelatedColumnShadowAlgorithms(tableName, shadowCondition.getShadowOperationType());
+        return relatedColumnShadowAlgorithms.isPresent() && isMatchAnyColumnShadowAlgorithms(relatedColumnShadowAlgorithms.get(), shadowCondition, shadowRule);
     }
     
     private boolean isMatchAnyColumnShadowAlgorithms(final Collection<ColumnShadowAlgorithm<Comparable<?>>> shadowAlgorithms, final ShadowDetermineCondition shadowCondition,
@@ -137,18 +171,11 @@ public abstract class AbstractShadowDMLStatementRouteEngine implements ShadowRou
     }
     
     /**
-     * Parse shadow column conditions.
+     * Get all tables.
      *
-     * @return shadow column condition
+     * @return all tables
      */
-    protected abstract Optional<Collection<ShadowColumnCondition>> parseShadowColumnConditions();
-    
-    /**
-     * Parse sql notes.
-     *
-     * @return sql notes
-     */
-    protected abstract Optional<Collection<String>> parseSqlNotes();
+    protected abstract Collection<SimpleTableSegment> getAllTables();
     
     /**
      * get shadow operation type.
@@ -158,11 +185,18 @@ public abstract class AbstractShadowDMLStatementRouteEngine implements ShadowRou
     protected abstract ShadowOperationType getShadowOperationType();
     
     /**
-     * Get all tables.
+     * Parse SQL Comments.
      *
-     * @return all tables
+     * @return SQL comments
      */
-    protected abstract Collection<SimpleTableSegment> getAllTables();
+    protected abstract Optional<Collection<String>> parseSQLComments();
+    
+    /**
+     * Get shadow column condition iterator.
+     *
+     * @return shadow column condition iterator
+     */
+    protected abstract Iterator<Optional<ShadowColumnCondition>> getShadowColumnConditionIterator();
     
     /**
      * Get single table tame.
