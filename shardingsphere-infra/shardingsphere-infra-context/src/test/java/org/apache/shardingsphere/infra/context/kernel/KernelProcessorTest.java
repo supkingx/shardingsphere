@@ -18,9 +18,10 @@
 package org.apache.shardingsphere.infra.context.kernel;
 
 import org.apache.shardingsphere.infra.binder.LogicSQL;
+import org.apache.shardingsphere.infra.binder.statement.CommonSQLStatementContext;
 import org.apache.shardingsphere.infra.binder.statement.SQLStatementContext;
-import org.apache.shardingsphere.infra.config.properties.ConfigurationProperties;
-import org.apache.shardingsphere.infra.config.properties.ConfigurationPropertyKey;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.config.props.ConfigurationPropertyKey;
 import org.apache.shardingsphere.infra.executor.sql.context.ExecutionContext;
 import org.apache.shardingsphere.infra.metadata.ShardingSphereMetaData;
 import org.apache.shardingsphere.infra.metadata.resource.ShardingSphereResource;
@@ -44,7 +45,7 @@ public final class KernelProcessorTest {
     @SuppressWarnings("unchecked")
     @Test
     public void assertGenerateExecutionContext() {
-        SQLStatementContext<SQLStatement> sqlStatementContext = mock(SQLStatementContext.class);
+        SQLStatementContext<SQLStatement> sqlStatementContext = mock(CommonSQLStatementContext.class);
         when(sqlStatementContext.getSqlStatement()).thenReturn(mock(SelectStatement.class));
         LogicSQL logicSQL = new LogicSQL(sqlStatementContext, "SELECT * FROM tbl", Collections.emptyList());
         ShardingSphereMetaData metaData = new ShardingSphereMetaData("logic_schema", 

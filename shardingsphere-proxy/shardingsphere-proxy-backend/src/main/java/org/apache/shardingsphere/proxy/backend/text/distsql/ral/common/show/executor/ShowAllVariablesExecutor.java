@@ -18,12 +18,13 @@
 package org.apache.shardingsphere.proxy.backend.text.distsql.ral.common.show.executor;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.infra.config.properties.ConfigurationProperties;
-import org.apache.shardingsphere.infra.config.properties.ConfigurationPropertyKey;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.config.props.ConfigurationPropertyKey;
 import org.apache.shardingsphere.infra.merge.result.MergedResult;
-import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.BackendConnection;
+import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.JDBCBackendConnection;
 import org.apache.shardingsphere.proxy.backend.context.ProxyContext;
 import org.apache.shardingsphere.proxy.backend.response.header.query.impl.QueryHeader;
+import org.apache.shardingsphere.proxy.backend.session.ConnectionSession;
 import org.apache.shardingsphere.proxy.backend.text.distsql.ral.common.enums.VariableEnum;
 import org.apache.shardingsphere.proxy.backend.util.SystemPropertyUtil;
 import org.apache.shardingsphere.sharding.merge.dal.common.MultipleLocalDataMergedResult;
@@ -39,7 +40,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public final class ShowAllVariablesExecutor extends AbstractShowExecutor {
     
-    private final BackendConnection backendConnection;
+    private final ConnectionSession connectionSession;
     
     @Override
     protected List<QueryHeader> createQueryHeaders() {
@@ -53,13 +54,15 @@ public final class ShowAllVariablesExecutor extends AbstractShowExecutor {
     protected MergedResult createMergedResult() {
         List<List<Object>> rows = new LinkedList<>();
         ConfigurationProperties configurationProperties = ProxyContext.getInstance().getContextManager().getMetaDataContexts().getProps();
-        ConfigurationPropertyKey.getKeyNames().stream().forEach(each -> {
+        ConfigurationPropertyKey.getKeyNames().forEach(each -> {
             String propertyValue = configurationProperties.getValue(ConfigurationPropertyKey.valueOf(each)).toString();
             rows.add(Arrays.asList(each.toLowerCase(), propertyValue));
         });
         rows.add(Arrays.asList(VariableEnum.AGENT_PLUGINS_ENABLED.name().toLowerCase(), SystemPropertyUtil.getSystemProperty(VariableEnum.AGENT_PLUGINS_ENABLED.name(), Boolean.FALSE.toString())));
-        rows.add(Arrays.asList(VariableEnum.CACHED_CONNECTIONS.name().toLowerCase(), backendConnection.getConnectionSize()));
-        rows.add(Arrays.asList(VariableEnum.TRANSACTION_TYPE.name().toLowerCase(), backendConnection.getTransactionStatus().getTransactionType().name()));
+        if (connectionSession.getBackendConnection() instanceof JDBCBackendConnection) {
+            rows.add(Arrays.asList(VariableEnum.CACHED_CONNECTIONS.name().toLowerCase(), ((JDBCBackendConnection) connectionSession.getBackendConnection()).getConnectionSize()));
+        }
+        rows.add(Arrays.asList(VariableEnum.TRANSACTION_TYPE.name().toLowerCase(), connectionSession.getTransactionStatus().getTransactionType().name()));
         return new MultipleLocalDataMergedResult(rows);
     }
 }

@@ -20,11 +20,18 @@ package org.apache.shardingsphere.sharding.rule;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import lombok.Getter;
+import org.apache.shardingsphere.infra.binder.segment.select.projection.impl.ColumnProjection;
+import org.apache.shardingsphere.infra.binder.statement.SQLStatementContext;
+import org.apache.shardingsphere.infra.binder.statement.dml.SelectStatementContext;
 import org.apache.shardingsphere.infra.config.algorithm.ShardingSphereAlgorithmFactory;
+import org.apache.shardingsphere.infra.config.algorithm.ShardingSphereInstanceRequiredAlgorithm;
 import org.apache.shardingsphere.infra.config.exception.ShardingSphereConfigurationException;
 import org.apache.shardingsphere.infra.datanode.DataNode;
+import org.apache.shardingsphere.infra.instance.InstanceContext;
+import org.apache.shardingsphere.infra.metadata.schema.ShardingSphereSchema;
 import org.apache.shardingsphere.infra.rule.identifier.scope.SchemaRule;
 import org.apache.shardingsphere.infra.rule.identifier.type.DataNodeContainedRule;
+import org.apache.shardingsphere.infra.rule.identifier.type.InstanceAwareRule;
 import org.apache.shardingsphere.infra.rule.identifier.type.TableContainedRule;
 import org.apache.shardingsphere.sharding.algorithm.config.AlgorithmProvidedShardingRuleConfiguration;
 import org.apache.shardingsphere.sharding.api.config.ShardingRuleConfiguration;
@@ -41,8 +48,17 @@ import org.apache.shardingsphere.sharding.spi.ShardingAlgorithm;
 import org.apache.shardingsphere.sharding.support.InlineExpressionParser;
 import org.apache.shardingsphere.spi.ShardingSphereServiceLoader;
 import org.apache.shardingsphere.spi.required.RequiredSPIRegistry;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.column.ColumnSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BinaryOperationExpression;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.predicate.AndPredicate;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.predicate.WhereSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.util.ExpressionExtractUtil;
+import org.apache.shardingsphere.sql.parser.sql.common.util.WhereExtractUtil;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -59,7 +75,9 @@ import java.util.stream.Collectors;
  * Sharding rule.
  */
 @Getter
-public final class ShardingRule implements SchemaRule, DataNodeContainedRule, TableContainedRule {
+public final class ShardingRule implements SchemaRule, DataNodeContainedRule, TableContainedRule, InstanceAwareRule {
+    
+    private static final String EQUAL = "=";
     
     static {
         ShardingSphereServiceLoader.register(ShardingAlgorithm.class);
@@ -74,7 +92,7 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
     
     private final Map<String, TableRule> tableRules = new LinkedHashMap<>();
     
-    private final Collection<BindingTableRule> bindingTableRules;
+    private final Map<String, BindingTableRule> bindingTableRules = new LinkedHashMap<>();
     
     private final Collection<String> broadcastTables;
     
@@ -92,8 +110,8 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
         config.getKeyGenerators().forEach((key, value) -> keyGenerators.put(key, ShardingSphereAlgorithmFactory.createAlgorithm(value, KeyGenerateAlgorithm.class)));
         tableRules.putAll(createTableRules(config.getTables(), config.getDefaultKeyGenerateStrategy()));
         tableRules.putAll(createAutoTableRules(config.getAutoTables(), config.getDefaultKeyGenerateStrategy()));
+        bindingTableRules.putAll(createBindingTableRules(config.getBindingTableGroups()));
         broadcastTables = createBroadcastTables(config.getBroadcastTables());
-        bindingTableRules = createBindingTableRules(config.getBindingTableGroups());
         defaultDatabaseShardingStrategyConfig = null == config.getDefaultDatabaseShardingStrategy() ? new NoneShardingStrategyConfiguration() : config.getDefaultDatabaseShardingStrategy();
         defaultTableShardingStrategyConfig = null == config.getDefaultTableShardingStrategy() ? new NoneShardingStrategyConfiguration() : config.getDefaultTableShardingStrategy();
         defaultKeyGenerateAlgorithm = null == config.getDefaultKeyGenerateStrategy()
@@ -107,8 +125,8 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
         keyGenerators.putAll(config.getKeyGenerators());
         tableRules.putAll(createTableRules(config.getTables(), config.getDefaultKeyGenerateStrategy()));
         tableRules.putAll(createAutoTableRules(config.getAutoTables(), config.getDefaultKeyGenerateStrategy()));
+        bindingTableRules.putAll(createBindingTableRules(config.getBindingTableGroups()));
         broadcastTables = createBroadcastTables(config.getBroadcastTables());
-        bindingTableRules = createBindingTableRules(config.getBindingTableGroups());
         defaultDatabaseShardingStrategyConfig = null == config.getDefaultDatabaseShardingStrategy() ? new NoneShardingStrategyConfiguration() : config.getDefaultDatabaseShardingStrategy();
         defaultTableShardingStrategyConfig = null == config.getDefaultTableShardingStrategy() ? new NoneShardingStrategyConfiguration() : config.getDefaultTableShardingStrategy();
         defaultKeyGenerateAlgorithm = null == config.getDefaultKeyGenerateStrategy()
@@ -167,8 +185,15 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
         return result;
     }
     
-    private Collection<BindingTableRule> createBindingTableRules(final Collection<String> bindingTableGroups) {
-        return bindingTableGroups.stream().map(this::createBindingTableRule).collect(Collectors.toList());
+    private Map<String, BindingTableRule> createBindingTableRules(final Collection<String> bindingTableGroups) {
+        Map<String, BindingTableRule> result = new LinkedHashMap<>();
+        for (String each : bindingTableGroups) {
+            BindingTableRule bindingTableRule = createBindingTableRule(each);
+            for (String logicTable : bindingTableRule.getAllLogicTables()) {
+                result.put(logicTable.toLowerCase(), bindingTableRule);
+            }
+        }
+        return result;
     }
     
     private BindingTableRule createBindingTableRule(final String bindingTableGroup) {
@@ -223,7 +248,12 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
      * @return table rule
      */
     public Optional<TableRule> findTableRuleByActualTable(final String actualTableName) {
-        return tableRules.values().stream().filter(each -> each.isExisted(actualTableName)).findFirst();
+        for (TableRule each : tableRules.values()) {
+            if (each.isExisted(actualTableName)) {
+                return Optional.of(each);
+            }
+        }
+        return Optional.empty();
     }
     
     /**
@@ -244,10 +274,10 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
     }
     
     /**
-     * Judge whether logic table is all binding encryptors or not.
+     * Judge whether logic table is all binding tables or not.
      *
      * @param logicTableNames logic table names
-     * @return whether logic table is all binding encryptors or not
+     * @return whether logic table is all binding tables or not
      */
     public boolean isAllBindingTables(final Collection<String> logicTableNames) {
         if (logicTableNames.isEmpty()) {
@@ -262,6 +292,27 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
         return !result.isEmpty() && result.containsAll(logicTableNames);
     }
     
+    /**
+     * Judge whether logic table is all binding tables.
+     *
+     * @param schema schema
+     * @param sqlStatementContext sqlStatementContext
+     * @param logicTableNames logic table names
+     * @return whether logic table is all binding tables
+     */
+    public boolean isAllBindingTables(final ShardingSphereSchema schema, final SQLStatementContext<?> sqlStatementContext, final Collection<String> logicTableNames) {
+        if (!(sqlStatementContext instanceof SelectStatementContext && ((SelectStatementContext) sqlStatementContext).isContainsJoinQuery())) {
+            return isAllBindingTables(logicTableNames);
+        }
+        if (!isAllBindingTables(logicTableNames)) {
+            return false;
+        }
+        SelectStatementContext select = (SelectStatementContext) sqlStatementContext;
+        Collection<WhereSegment> joinSegments = WhereExtractUtil.getJoinWhereSegments(select.getSqlStatement());
+        Collection<WhereSegment> whereSegments = select.getWhere().isPresent() ? Collections.singletonList(select.getWhere().get()) : Collections.emptyList();
+        return isJoinConditionContainsShardingColumns(schema, select, logicTableNames, joinSegments) || isJoinConditionContainsShardingColumns(schema, select, logicTableNames, whereSegments);
+    }
+    
     private Optional<BindingTableRule> findBindingTableRule(final Collection<String> logicTableNames) {
         return logicTableNames.stream().map(this::findBindingTableRule).filter(Optional::isPresent).findFirst().orElse(Optional.empty());
     }
@@ -273,14 +324,14 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
      * @return binding table rule
      */
     public Optional<BindingTableRule> findBindingTableRule(final String logicTableName) {
-        return bindingTableRules.stream().filter(each -> each.hasLogicTable(logicTableName)).findFirst();
+        return Optional.ofNullable(bindingTableRules.get(logicTableName.toLowerCase()));
     }
     
     /**
-     * Judge whether logic table is all broadcast encryptors or not.
+     * Judge whether logic table is all broadcast tables or not.
      *
      * @param logicTableNames logic table names
-     * @return whether logic table is all broadcast encryptors or not
+     * @return whether logic table is all broadcast tables or not
      */
     public boolean isAllBroadcastTables(final Collection<String> logicTableNames) {
         return !logicTableNames.isEmpty() && broadcastTables.containsAll(logicTableNames);
@@ -293,7 +344,15 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
      * @return whether logic table is all sharding table or not
      */
     public boolean isAllShardingTables(final Collection<String> logicTableNames) {
-        return !logicTableNames.isEmpty() && logicTableNames.stream().allMatch(this::isShardingTable);
+        if (logicTableNames.isEmpty()) {
+            return false;
+        }
+        for (String each : logicTableNames) {
+            if (!isShardingTable(each)) {
+                return false;
+            }
+        }
+        return true;
     }
     
     /**
@@ -339,35 +398,39 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
     }
     
     /**
-     * Judge whether given logic table column is sharding column or not.
+     * Find sharding column.
      *
      * @param columnName column name
      * @param tableName table name
-     * @return whether given logic table column is sharding column or not
+     * @return sharding column
      */
-    public boolean isShardingColumn(final String columnName, final String tableName) {
-        return Optional.ofNullable(tableRules.get(tableName.toLowerCase())).filter(each -> isShardingColumn(each, columnName)).isPresent();
+    public Optional<String> findShardingColumn(final String columnName, final String tableName) {
+        return Optional.ofNullable(tableRules.get(tableName.toLowerCase())).flatMap(optional -> findShardingColumn(optional, columnName));
     }
     
-    private boolean isShardingColumn(final TableRule tableRule, final String columnName) {
-        return isShardingColumn(getDatabaseShardingStrategyConfiguration(tableRule), columnName) || isShardingColumn(getTableShardingStrategyConfiguration(tableRule), columnName);
+    private Optional<String> findShardingColumn(final TableRule tableRule, final String columnName) {
+        Optional<String> databaseShardingColumn = findShardingColumn(getDatabaseShardingStrategyConfiguration(tableRule), columnName);
+        if (databaseShardingColumn.isPresent()) {
+            return databaseShardingColumn;
+        }
+        return findShardingColumn(getTableShardingStrategyConfiguration(tableRule), columnName);
     }
     
-    private boolean isShardingColumn(final ShardingStrategyConfiguration shardingStrategyConfig, final String columnName) {
+    private Optional<String> findShardingColumn(final ShardingStrategyConfiguration shardingStrategyConfig, final String columnName) {
         if (shardingStrategyConfig instanceof StandardShardingStrategyConfiguration) {
             String shardingColumn = null == ((StandardShardingStrategyConfiguration) shardingStrategyConfig).getShardingColumn()
                     ? defaultShardingColumn : ((StandardShardingStrategyConfiguration) shardingStrategyConfig).getShardingColumn();
-            return shardingColumn.equalsIgnoreCase(columnName);
+            return shardingColumn.equalsIgnoreCase(columnName) ? Optional.of(shardingColumn) : Optional.empty();
         }
         if (shardingStrategyConfig instanceof ComplexShardingStrategyConfiguration) {
             List<String> shardingColumns = Splitter.on(",").trimResults().splitToList(((ComplexShardingStrategyConfiguration) shardingStrategyConfig).getShardingColumns());
             for (String each : shardingColumns) {
                 if (each.equalsIgnoreCase(columnName)) {
-                    return true;
+                    return Optional.of(each);
                 }
             }
         }
-        return false;
+        return Optional.empty();
     } 
     
     /**
@@ -429,7 +492,13 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
      * @return sharding logic table names
      */
     public Collection<String> getShardingLogicTableNames(final Collection<String> logicTableNames) {
-        return logicTableNames.stream().filter(this::isShardingTable).collect(Collectors.toCollection(LinkedList::new));
+        Collection<String> result = new LinkedList<>();
+        for (String each : logicTableNames) {
+            if (isShardingTable(each)) {
+                result.add(each);
+            }
+        }
+        return result;
     }
     
     /**
@@ -453,9 +522,18 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
      */
     public Map<String, String> getLogicAndActualTablesFromBindingTable(final String dataSourceName,
                                                                        final String logicTable, final String actualTable, final Collection<String> availableLogicBindingTables) {
-        Map<String, String> result = new LinkedHashMap<>();
-        findBindingTableRule(logicTable).ifPresent(bindingTableRule -> result.putAll(bindingTableRule.getLogicAndActualTables(dataSourceName, logicTable, actualTable, availableLogicBindingTables)));
-        return result;
+        return findBindingTableRule(logicTable).map(optional 
+            -> optional.getLogicAndActualTables(dataSourceName, logicTable, actualTable, availableLogicBindingTables)).orElseGet(Collections::emptyMap);
+    }
+
+    /**
+     * Get logic tables via actual table name.
+     *
+     * @param actualTable actual table name
+     * @return logic tables
+     */
+    public Collection<String> getLogicTablesByActualTable(final String actualTable) {
+        return tableRules.values().stream().filter(each -> each.isExisted(actualTable)).map(TableRule::getLogicTable).collect(Collectors.toSet());
     }
     
     @Override
@@ -504,5 +582,75 @@ public final class ShardingRule implements SchemaRule, DataNodeContainedRule, Ta
     @Override
     public String getType() {
         return ShardingRule.class.getSimpleName();
+    }
+    
+    private boolean isJoinConditionContainsShardingColumns(final ShardingSphereSchema schema, final SelectStatementContext select, 
+                                                           final Collection<String> tableNames, final Collection<WhereSegment> whereSegments) {
+        Collection<String> databaseJoinConditionTables = new HashSet<>(tableNames.size());
+        Collection<String> tableJoinConditionTables = new HashSet<>(tableNames.size());
+        for (WhereSegment each : whereSegments) {
+            Collection<AndPredicate> andPredicates = ExpressionExtractUtil.getAndPredicates(each.getExpr());
+            if (andPredicates.size() > 1) {
+                return false;
+            }
+            for (AndPredicate andPredicate : andPredicates) {
+                databaseJoinConditionTables.addAll(getJoinConditionTables(schema, select, andPredicate.getPredicates(), true));
+                tableJoinConditionTables.addAll(getJoinConditionTables(schema, select, andPredicate.getPredicates(), false));
+            }
+        }
+        TableRule tableRule = getTableRule(tableNames.iterator().next());
+        boolean containsDatabaseShardingColumns = !(getDatabaseShardingStrategyConfiguration(tableRule) instanceof StandardShardingStrategyConfiguration) 
+                || databaseJoinConditionTables.containsAll(tableNames);
+        boolean containsTableShardingColumns = !(getTableShardingStrategyConfiguration(tableRule) instanceof StandardShardingStrategyConfiguration) || tableJoinConditionTables.containsAll(tableNames);
+        return containsDatabaseShardingColumns && containsTableShardingColumns;
+    }
+    
+    private Collection<String> getJoinConditionTables(final ShardingSphereSchema schema, final SelectStatementContext select,
+                                                      final Collection<ExpressionSegment> predicates, final boolean isDatabaseJoinCondition) {
+        Collection<String> result = new LinkedList<>();
+        for (ExpressionSegment each : predicates) {
+            if (!isJoinConditionExpression(each)) {
+                continue;
+            }
+            ColumnProjection leftColumn = buildColumnProjection((ColumnSegment) ((BinaryOperationExpression) each).getLeft());
+            ColumnProjection rightColumn = buildColumnProjection((ColumnSegment) ((BinaryOperationExpression) each).getRight());
+            Map<String, String> columnTableNames = select.getTablesContext().findTableName(Arrays.asList(leftColumn, rightColumn), schema);
+            Optional<TableRule> leftTableRule = findTableRule(columnTableNames.get(leftColumn.getExpression()));
+            Optional<TableRule> rightTableRule = findTableRule(columnTableNames.get(rightColumn.getExpression()));
+            if (!leftTableRule.isPresent() || !rightTableRule.isPresent()) {
+                continue;
+            }
+            ShardingStrategyConfiguration leftConfiguration = isDatabaseJoinCondition
+                    ? getDatabaseShardingStrategyConfiguration(leftTableRule.get()) : getTableShardingStrategyConfiguration(leftTableRule.get());
+            ShardingStrategyConfiguration rightConfiguration = isDatabaseJoinCondition
+                    ? getDatabaseShardingStrategyConfiguration(rightTableRule.get()) : getTableShardingStrategyConfiguration(rightTableRule.get());
+            if (findShardingColumn(leftConfiguration, leftColumn.getName()).isPresent() && findShardingColumn(rightConfiguration, rightColumn.getName()).isPresent()) {
+                result.add(columnTableNames.get(leftColumn.getExpression()));
+                result.add(columnTableNames.get(rightColumn.getExpression()));
+            }
+        }
+        return result;
+    }
+    
+    private ColumnProjection buildColumnProjection(final ColumnSegment segment) {
+        String owner = segment.getOwner().map(optional -> optional.getIdentifier().getValue()).orElse(null);
+        return new ColumnProjection(owner, segment.getIdentifier().getValue(), null);
+    }
+    
+    private boolean isJoinConditionExpression(final ExpressionSegment expression) {
+        if (!(expression instanceof BinaryOperationExpression)) {
+            return false;
+        }
+        BinaryOperationExpression binaryExpression = (BinaryOperationExpression) expression;
+        return binaryExpression.getLeft() instanceof ColumnSegment && binaryExpression.getRight() instanceof ColumnSegment && EQUAL.equals(binaryExpression.getOperator());
+    }
+    
+    @Override
+    public void setInstanceContext(final InstanceContext instanceContext) {
+        keyGenerators.values().stream().filter(each -> each instanceof ShardingSphereInstanceRequiredAlgorithm)
+                .forEach(each -> ((ShardingSphereInstanceRequiredAlgorithm) each).setInstanceContext(instanceContext));
+        if (defaultKeyGenerateAlgorithm instanceof ShardingSphereInstanceRequiredAlgorithm) {
+            ((ShardingSphereInstanceRequiredAlgorithm) defaultKeyGenerateAlgorithm).setInstanceContext(instanceContext);
+        }
     }
 }

@@ -22,17 +22,12 @@ import lombok.RequiredArgsConstructor;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.PostgreSQLCommandPacket;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.PostgreSQLCommandPacketType;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.extended.PostgreSQLPreparedStatementRegistry;
-import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.extended.bind.PostgreSQLComBindPacket;
-import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.extended.close.PostgreSQLComClosePacket;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.extended.execute.PostgreSQLComExecutePacket;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.extended.parse.PostgreSQLComParsePacket;
 import org.apache.shardingsphere.db.protocol.postgresql.packet.command.query.simple.PostgreSQLComQueryPacket;
-import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.BackendConnection;
+import org.apache.shardingsphere.proxy.backend.session.ConnectionSession;
 import org.apache.shardingsphere.proxy.frontend.command.executor.CommandExecutor;
 import org.apache.shardingsphere.proxy.frontend.postgresql.command.generic.PostgreSQLComTerminationExecutor;
-import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.bind.PostgreSQLComBindExecutor;
-import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.close.PostgreSQLComCloseExecutor;
-import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.describe.PostgreSQLComDescribeExecutor;
 import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.execute.PostgreSQLComExecuteExecutor;
 import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.parse.PostgreSQLComParseExecutor;
 import org.apache.shardingsphere.proxy.frontend.postgresql.command.query.extended.sync.PostgreSQLComSyncExecutor;
@@ -48,11 +43,8 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedList;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -61,7 +53,7 @@ import static org.mockito.Mockito.when;
 public final class PostgreSQLCommandExecutorFactoryTest {
     
     @Mock
-    private BackendConnection backendConnection;
+    private ConnectionSession connectionSession;
     
     @Mock
     private PostgreSQLConnectionContext connectionContext;
@@ -70,27 +62,10 @@ public final class PostgreSQLCommandExecutorFactoryTest {
     public void setup() {
         PostgreSQLPreparedStatementRegistry.getInstance().register(1);
         PostgreSQLPreparedStatementRegistry.getInstance().register(1, "2", "", new EmptyStatement(), Collections.emptyList());
-        when(backendConnection.getConnectionId()).thenReturn(1);
-    }
-    
-    @Test
-    public void assertPendingCommandExecutors() throws SQLException {
-        PostgreSQLConnectionContext connectionContext = mock(PostgreSQLConnectionContext.class);
-        Collection<CommandExecutor> pendingCommandExecutors = new LinkedList<>();
-        when(connectionContext.getPendingExecutors()).thenReturn(pendingCommandExecutors);
-        PostgreSQLCommandExecutorFactory.newInstance(PostgreSQLCommandPacketType.CLOSE_COMMAND, mock(PostgreSQLComClosePacket.class), backendConnection, connectionContext);
-        PostgreSQLCommandExecutorFactory.newInstance(PostgreSQLCommandPacketType.BIND_COMMAND, mock(PostgreSQLComBindPacket.class), backendConnection, connectionContext);
-        PostgreSQLCommandExecutorFactory.newInstance(PostgreSQLCommandPacketType.DESCRIBE_COMMAND, null, backendConnection, connectionContext);
-        assertThat(pendingCommandExecutors.size(), is(3));
-        Iterator<CommandExecutor> commandExecutorIterator = pendingCommandExecutors.iterator();
-        assertThat(commandExecutorIterator.next(), instanceOf(PostgreSQLComCloseExecutor.class));
-        assertThat(commandExecutorIterator.next(), instanceOf(PostgreSQLComBindExecutor.class));
-        assertThat(commandExecutorIterator.next(), instanceOf(PostgreSQLComDescribeExecutor.class));
     }
     
     @Test
     public void assertNewInstance() throws SQLException {
-        when(backendConnection.getSchemaName()).thenReturn("schema");
         Collection<InputOutput> inputOutputs = Arrays.asList(
             new InputOutput(PostgreSQLCommandPacketType.SIMPLE_QUERY, PostgreSQLComQueryPacket.class, PostgreSQLComQueryExecutor.class),
             new InputOutput(PostgreSQLCommandPacketType.PARSE_COMMAND, PostgreSQLComParsePacket.class, PostgreSQLComParseExecutor.class),
@@ -104,7 +79,7 @@ public final class PostgreSQLCommandExecutorFactoryTest {
                 commandPacketClass = PostgreSQLCommandPacket.class;
             }
             PostgreSQLCommandPacket packet = preparePacket(commandPacketClass);
-            CommandExecutor actual = PostgreSQLCommandExecutorFactory.newInstance(inputOutput.getCommandPacketType(), packet, backendConnection, connectionContext);
+            CommandExecutor actual = PostgreSQLCommandExecutorFactory.newInstance(inputOutput.getCommandPacketType(), packet, connectionSession, connectionContext);
             assertThat(actual, instanceOf(inputOutput.getResultClass()));
         }
     }
@@ -113,10 +88,6 @@ public final class PostgreSQLCommandExecutorFactoryTest {
         PostgreSQLCommandPacket result = mock(commandPacketClass);
         if (result instanceof PostgreSQLComQueryPacket) {
             when(((PostgreSQLComQueryPacket) result).getSql()).thenReturn("");
-        }
-        if (result instanceof PostgreSQLComParsePacket) {
-            when(((PostgreSQLComParsePacket) result).getStatementId()).thenReturn("S_0");
-            when(((PostgreSQLComParsePacket) result).getSql()).thenReturn("");
         }
         return result;
     }

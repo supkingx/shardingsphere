@@ -18,7 +18,7 @@
 package org.apache.shardingsphere.infra.rewrite;
 
 import org.apache.shardingsphere.infra.binder.statement.SQLStatementContext;
-import org.apache.shardingsphere.infra.config.properties.ConfigurationProperties;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
 import org.apache.shardingsphere.infra.metadata.schema.ShardingSphereSchema;
 import org.apache.shardingsphere.infra.rewrite.context.SQLRewriteContext;
 import org.apache.shardingsphere.infra.rewrite.context.SQLRewriteContextDecorator;
@@ -33,6 +33,7 @@ import org.apache.shardingsphere.spi.ordered.OrderedSPIRegistry;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * SQL rewrite entry.
@@ -80,6 +81,8 @@ public final class SQLRewriteEntry {
     
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void decorate(final Map<ShardingSphereRule, SQLRewriteContextDecorator> decorators, final SQLRewriteContext sqlRewriteContext, final RouteContext routeContext) {
-        decorators.forEach((key, value) -> value.decorate(key, props, sqlRewriteContext, routeContext));
+        for (Entry<ShardingSphereRule, SQLRewriteContextDecorator> entry : decorators.entrySet()) {
+            entry.getValue().decorate(entry.getKey(), props, sqlRewriteContext, routeContext);
+        }
     }
 }

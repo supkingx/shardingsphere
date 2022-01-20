@@ -25,7 +25,6 @@ import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.shardingsphere.sql.parser.api.visitor.ASTNode;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementBaseVisitor;
-import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.AggregationFunctionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.AliasContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.AssignmentContext;
@@ -38,6 +37,7 @@ import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.Boolean
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.BooleanPrimaryContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.CastFunctionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.CharFunctionContext;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.CollateClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.ColumnNameContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.ColumnNamesContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.ColumnRefContext;
@@ -73,6 +73,7 @@ import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LimitCl
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LimitOffsetContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LimitRowCountContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LiteralsContext;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LockClauseContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.LockClauseListContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.MatchExpressionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.MultipleTablesClauseContext;
@@ -112,7 +113,9 @@ import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.String_
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.SubqueryContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.SubstringFunctionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableAliasRefListContext;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableFactorContext;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableIdentOptWildContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableListContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableNameContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableReferenceContext;
@@ -131,6 +134,7 @@ import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.WindowF
 import org.apache.shardingsphere.sql.parser.sql.common.constant.AggregationType;
 import org.apache.shardingsphere.sql.parser.sql.common.constant.JoinType;
 import org.apache.shardingsphere.sql.parser.sql.common.constant.OrderDirection;
+import org.apache.shardingsphere.sql.parser.sql.common.constant.ParameterMarkerType;
 import org.apache.shardingsphere.sql.parser.sql.common.constant.UnionType;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.ddl.constraint.ConstraintSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.ddl.index.IndexSegment;
@@ -143,6 +147,7 @@ import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.column.Insert
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.column.OnDuplicateKeyColumnsSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BetweenExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.BinaryOperationExpression;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.CollateExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExistsSubqueryExpression;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.ExpressionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.FunctionSegment;
@@ -152,6 +157,7 @@ import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.NotExpre
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.complex.CommonExpressionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.simple.LiteralExpressionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.simple.ParameterMarkerExpressionSegment;
+import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.simple.SimpleExpressionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.subquery.SubqueryExpressionSegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.expr.subquery.SubquerySegment;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.dml.item.AggregationDistinctProjectionSegment;
@@ -199,6 +205,7 @@ import org.apache.shardingsphere.sql.parser.sql.common.value.parametermarker.Par
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLDeleteStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLInsertStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLSelectStatement;
+import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLTableStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLUpdateStatement;
 
 import java.util.Collection;
@@ -222,7 +229,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     
     @Override
     public final ASTNode visitParameterMarker(final ParameterMarkerContext ctx) {
-        return new ParameterMarkerValue(currentParameterIndex++);
+        return new ParameterMarkerValue(currentParameterIndex++, ParameterMarkerType.QUESTION);
     }
     
     @Override
@@ -533,7 +540,8 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
             return new SubqueryExpressionSegment(subquerySegment);
         }
         if (null != ctx.parameterMarker()) {
-            return new ParameterMarkerExpressionSegment(startIndex, stopIndex, ((ParameterMarkerValue) visit(ctx.parameterMarker())).getValue());
+            ParameterMarkerValue parameterMarker = (ParameterMarkerValue) visit(ctx.parameterMarker());
+            return new ParameterMarkerExpressionSegment(startIndex, stopIndex, parameterMarker.getValue(), parameterMarker.getType());
         }
         if (null != ctx.literals()) {
             return SQLUtil.createLiteralExpression(visit(ctx.literals()), startIndex, stopIndex, ctx.literals().start.getInputStream().getText(new Interval(startIndex, stopIndex)));
@@ -543,6 +551,10 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         }
         if (null != ctx.functionCall()) {
             return visit(ctx.functionCall());
+        }
+        if (null != ctx.collateClause()) {
+            SimpleExpressionSegment collateValueSegment = (SimpleExpressionSegment) visit(ctx.collateClause());
+            return new CollateExpression(startIndex, stopIndex, collateValueSegment);
         }
         if (null != ctx.columnRef()) {
             return visit(ctx.columnRef());
@@ -601,7 +613,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     @Override
     public ASTNode visitLockClauseList(final LockClauseListContext ctx) {
         LockSegment result = new LockSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
-        for (MySQLStatementParser.LockClauseContext each : ctx.lockClause()) {
+        for (LockClauseContext each : ctx.lockClause()) {
             if (null != each.tableLockingList()) {
                 result.getTables().addAll(generateTablesFromTableAliasRefList(each.tableLockingList().tableAliasRefList()));
             }
@@ -797,7 +809,15 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     @Override
     public final ASTNode visitCastFunction(final CastFunctionContext ctx) {
         calculateParameterCount(Collections.singleton(ctx.expr()));
-        return new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.CAST().getText(), getOriginalText(ctx));
+        FunctionSegment result = new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.CAST().getText(), getOriginalText(ctx));
+        ASTNode exprSegment = visit(ctx.expr());
+        if (exprSegment instanceof ColumnSegment) {
+            result.getParameters().add((ColumnSegment) exprSegment);
+        } else if (exprSegment instanceof LiteralExpressionSegment) {
+            result.getParameters().add((LiteralExpressionSegment) exprSegment);
+        }
+        result.getParameters().add((DataTypeSegment) visit(ctx.dataType()));
+        return result;
     }
     
     @Override
@@ -846,7 +866,12 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     
     @Override
     public final ASTNode visitValuesFunction(final ValuesFunctionContext ctx) {
-        return new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.VALUES().getText(), getOriginalText(ctx));
+        FunctionSegment result = new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.VALUES().getText(), getOriginalText(ctx));
+        if (!ctx.columnRefList().columnRef().isEmpty()) {
+            ColumnSegment columnSegment = (ColumnSegment) visit(ctx.columnRefList().columnRef(0));
+            result.getParameters().add(columnSegment);
+        }
+        return result; 
     }
     
     @Override
@@ -888,6 +913,9 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
             visit(ctx.caseExpression());
             String text = ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
             return new CommonExpressionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), text);
+        }
+        if (null != ctx.BINARY()) {
+            return visit(ctx.simpleExpr(0));
         }
         for (ExprContext each : ctx.expr()) {
             visit(each);
@@ -1038,9 +1066,9 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         return result;
     }
     
-    private Collection<InsertValuesSegment> createInsertValuesSegments(final Collection<MySQLStatementParser.AssignmentValuesContext> assignmentValuesContexts) {
+    private Collection<InsertValuesSegment> createInsertValuesSegments(final Collection<AssignmentValuesContext> assignmentValuesContexts) {
         Collection<InsertValuesSegment> result = new LinkedList<>();
-        for (MySQLStatementParser.AssignmentValuesContext each : assignmentValuesContexts) {
+        for (AssignmentValuesContext each : assignmentValuesContexts) {
             result.add((InsertValuesSegment) visit(each));
         }
         return result;
@@ -1049,7 +1077,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     @Override
     public ASTNode visitOnDuplicateKeyClause(final OnDuplicateKeyClauseContext ctx) {
         Collection<AssignmentSegment> columns = new LinkedList<>();
-        for (MySQLStatementParser.AssignmentContext each : ctx.assignment()) {
+        for (AssignmentContext each : ctx.assignment()) {
             columns.add((AssignmentSegment) visit(each));
         }
         return new OnDuplicateKeyColumnsSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), columns);
@@ -1117,9 +1145,9 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         return result;
     }
     
-    private Collection<InsertValuesSegment> createReplaceValuesSegments(final Collection<MySQLStatementParser.AssignmentValuesContext> assignmentValuesContexts) {
+    private Collection<InsertValuesSegment> createReplaceValuesSegments(final Collection<AssignmentValuesContext> assignmentValuesContexts) {
         Collection<InsertValuesSegment> result = new LinkedList<>();
-        for (MySQLStatementParser.AssignmentValuesContext each : assignmentValuesContexts) {
+        for (AssignmentValuesContext each : assignmentValuesContexts) {
             result.add((InsertValuesSegment) visit(each));
         }
         return result;
@@ -1147,7 +1175,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     @Override
     public ASTNode visitSetAssignmentsClause(final SetAssignmentsClauseContext ctx) {
         Collection<AssignmentSegment> assignments = new LinkedList<>();
-        for (MySQLStatementParser.AssignmentContext each : ctx.assignment()) {
+        for (AssignmentContext each : ctx.assignment()) {
             assignments.add((AssignmentSegment) visit(each));
         }
         return new SetAssignmentSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), assignments);
@@ -1156,7 +1184,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     @Override
     public ASTNode visitAssignmentValues(final AssignmentValuesContext ctx) {
         List<ExpressionSegment> segments = new LinkedList<>();
-        for (MySQLStatementParser.AssignmentValueContext each : ctx.assignmentValue()) {
+        for (AssignmentValueContext each : ctx.assignmentValue()) {
             segments.add((ExpressionSegment) visit(each));
         }
         return new InsertValuesSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), segments);
@@ -1232,7 +1260,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     
     private List<SimpleTableSegment> generateTablesFromTableAliasRefList(final TableAliasRefListContext ctx) {
         List<SimpleTableSegment> result = new LinkedList<>();
-        for (MySQLStatementParser.TableIdentOptWildContext each : ctx.tableIdentOptWild()) {
+        for (TableIdentOptWildContext each : ctx.tableIdentOptWild()) {
             result.add((SimpleTableSegment) visit(each.tableName()));
         }
         return result;
@@ -1257,7 +1285,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     }
     
     private boolean isDistinct(final QuerySpecificationContext ctx) {
-        for (MySQLStatementParser.SelectSpecificationContext each : ctx.selectSpecification()) {
+        for (SelectSpecificationContext each : ctx.selectSpecification()) {
             if (((BooleanLiteralValue) visit(each)).getValue()) {
                 return true;
             }
@@ -1288,7 +1316,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         if (null != ctx.unqualifiedShorthand()) {
             projections.add(new ShorthandProjectionSegment(ctx.unqualifiedShorthand().getStart().getStartIndex(), ctx.unqualifiedShorthand().getStop().getStopIndex()));
         }
-        for (MySQLStatementParser.ProjectionContext each : ctx.projection()) {
+        for (ProjectionContext each : ctx.projection()) {
             projections.add((ProjectionSegment) visit(each));
         }
         ProjectionsSegment result = new ProjectionsSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
@@ -1418,7 +1446,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         TableSegment result;
         TableSegment left;
         left = (TableSegment) visit(ctx.tableFactor());
-        for (MySQLStatementParser.JoinedTableContext each : ctx.joinedTable()) {
+        for (JoinedTableContext each : ctx.joinedTable()) {
             left = visitJoinedTable(each, left);
         }
         result = left;
@@ -1430,7 +1458,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         TableSegment result;
         TableSegment left;
         left = null != ctx.tableFactor() ? (TableSegment) visit(ctx.tableFactor()) : (TableSegment) visit(ctx.escapedTableReference());
-        for (MySQLStatementParser.JoinedTableContext each : ctx.joinedTable()) {
+        for (JoinedTableContext each : ctx.joinedTable()) {
             left = visitJoinedTable(each, left);
         }
         result = left;
@@ -1497,7 +1525,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         }
         if (null != ctx.USING()) {
             List<ColumnSegment> columnSegmentList = new LinkedList<>();
-            for (MySQLStatementParser.ColumnNameContext cname : ctx.columnNames().columnName()) {
+            for (ColumnNameContext cname : ctx.columnNames().columnName()) {
                 columnSegmentList.add((ColumnSegment) visit(cname));
             }
             joinTableSource.setUsing(columnSegmentList);
@@ -1556,6 +1584,23 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
             return new NumberLiteralLimitValueSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ((NumberLiteralValue) visit(ctx.numberLiterals())).getValue().longValue());
         }
         return new ParameterMarkerLimitValueSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ((ParameterMarkerValue) visit(ctx.parameterMarker())).getValue());
+    }
+    
+    @Override
+    public ASTNode visitTable(final TableContext ctx) {
+        MySQLTableStatement result = new MySQLTableStatement();
+        result.setTable((SimpleTableSegment) visit(ctx.tableName()));
+        result.setColumn((ColumnSegment) visit(ctx.columnName()));
+        result.setLimit((LimitSegment) visit(ctx.limitClause()));
+        return result;
+    }
+
+    @Override
+    public ASTNode visitCollateClause(final CollateClauseContext ctx) {
+        if (null != ctx.collationName()) {
+            return new LiteralExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.collationName().textOrIdentifier().getText());
+        }
+        return new ParameterMarkerExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ((ParameterMarkerValue) visit(ctx.parameterMarker())).getValue());
     }
     
     /**

@@ -53,8 +53,13 @@ execute
     | set
     | resetParameter
     | call
+    | alterAggregate
+    | alterCollation
     | alterFunction
     | alterDatabase
+    | alterDomain
+    | alterDefaultPrivileges
+    | alterForeignDataWrapper
     | alterProcedure
     | alterServer
     | alterSequence
@@ -65,6 +70,11 @@ execute
     | createTrigger
     | createView
     | createSequence
+    | createDomain
+    | createRule
+    | createSchema
+    | createType
+    | createTextSearch
     | dropDatabase
     | dropFunction
     | dropProcedure
@@ -72,6 +82,8 @@ execute
     | dropTrigger
     | dropView
     | dropSequence
+    | dropDomain
+    | dropSchema
     | vacuum
     | prepare
     | executeStmt
@@ -83,5 +95,18 @@ execute
     | alterTablespace
     | dropTablespace
     | setConstraints
+    | copy
+    | createLanguage
+    | alterLanguage
+    | dropLanguage
+    | createConversion
+    | alterConversion
+    | dropConversion
+    | alterTextSearchDictionary
+    | alterTextSearchTemplate
+    | alterTextSearchParser
+    | createExtension
+    | alterExtension
+    | dropExtension
     ) SEMI_?
     ;

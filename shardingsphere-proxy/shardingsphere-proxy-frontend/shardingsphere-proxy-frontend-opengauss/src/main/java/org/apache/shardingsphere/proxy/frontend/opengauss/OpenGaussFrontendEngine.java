@@ -18,10 +18,10 @@
 package org.apache.shardingsphere.proxy.frontend.opengauss;
 
 import lombok.Getter;
-import org.apache.shardingsphere.db.protocol.codec.DatabasePacketCodecEngine;
-import org.apache.shardingsphere.proxy.backend.communication.jdbc.connection.BackendConnection;
-import org.apache.shardingsphere.proxy.frontend.authentication.AuthenticationEngine;
+import org.apache.shardingsphere.db.protocol.opengauss.codec.OpenGaussPacketCodecEngine;
+import org.apache.shardingsphere.proxy.backend.session.ConnectionSession;
 import org.apache.shardingsphere.proxy.frontend.context.FrontendContext;
+import org.apache.shardingsphere.proxy.frontend.opengauss.authentication.OpenGaussAuthenticationEngine;
 import org.apache.shardingsphere.proxy.frontend.opengauss.command.OpenGaussCommandExecuteEngine;
 import org.apache.shardingsphere.proxy.frontend.postgresql.PostgreSQLFrontendEngine;
 import org.apache.shardingsphere.proxy.frontend.spi.DatabaseProtocolFrontendEngine;
@@ -34,7 +34,13 @@ public final class OpenGaussFrontendEngine implements DatabaseProtocolFrontendEn
     private final PostgreSQLFrontendEngine postgreSQLFrontendEngine = new PostgreSQLFrontendEngine();
     
     @Getter
+    private final OpenGaussPacketCodecEngine codecEngine = new OpenGaussPacketCodecEngine();
+    
+    @Getter
     private final OpenGaussCommandExecuteEngine commandExecuteEngine = new OpenGaussCommandExecuteEngine();
+    
+    @Getter
+    private final OpenGaussAuthenticationEngine authenticationEngine = new OpenGaussAuthenticationEngine();
     
     @Override
     public FrontendContext getFrontendContext() {
@@ -42,18 +48,8 @@ public final class OpenGaussFrontendEngine implements DatabaseProtocolFrontendEn
     }
     
     @Override
-    public DatabasePacketCodecEngine<?> getCodecEngine() {
-        return postgreSQLFrontendEngine.getCodecEngine();
-    }
-    
-    @Override
-    public AuthenticationEngine getAuthenticationEngine() {
-        return postgreSQLFrontendEngine.getAuthenticationEngine();
-    }
-    
-    @Override
-    public void release(final BackendConnection backendConnection) {
-        postgreSQLFrontendEngine.release(backendConnection);
+    public void release(final ConnectionSession connectionSession) {
+        postgreSQLFrontendEngine.release(connectionSession);
     }
     
     @Override

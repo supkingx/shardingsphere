@@ -22,9 +22,11 @@ import org.apache.shardingsphere.encrypt.rule.EncryptRule;
 import org.apache.shardingsphere.infra.database.DefaultSchema;
 import org.apache.shardingsphere.infra.datanode.DataNode;
 import org.apache.shardingsphere.infra.rule.ShardingSphereRule;
+import org.apache.shardingsphere.parser.rule.SQLParserRule;
 import org.apache.shardingsphere.readwritesplitting.rule.ReadwriteSplittingRule;
 import org.apache.shardingsphere.sharding.rule.ShardingRule;
 import org.apache.shardingsphere.spring.transaction.TransactionTypeScanner;
+import org.apache.shardingsphere.sql.parser.api.CacheOption;
 import org.junit.Test;
 import org.springframework.test.context.junit4.AbstractJUnit4SpringContextTests;
 
@@ -33,6 +35,7 @@ import javax.sql.DataSource;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertNotNull;
@@ -48,6 +51,7 @@ public abstract class AbstractSpringNamespaceTest extends AbstractJUnit4SpringCo
     public void assertShardingSphereDataSource() {
         assertDataSources();
         Collection<ShardingSphereRule> rules = dataSource.getContextManager().getMetaDataContexts().getMetaData(DefaultSchema.LOGIC_NAME).getRuleMetaData().getRules();
+        Collection<ShardingSphereRule> globalRules = dataSource.getContextManager().getMetaDataContexts().getGlobalRuleMetaData().getRules();
         assertThat(rules.size(), is(4));
         for (ShardingSphereRule each : rules) {
             if (each instanceof ShardingRule) {
@@ -56,6 +60,12 @@ public abstract class AbstractSpringNamespaceTest extends AbstractJUnit4SpringCo
                 assertReadwriteSplittingRule((ReadwriteSplittingRule) each);
             } else if (each instanceof EncryptRule) {
                 assertEncryptRule((EncryptRule) each);
+            }
+        }
+        assertThat(globalRules.size(), is(4));
+        for (ShardingSphereRule each : globalRules) {
+            if (each instanceof SQLParserRule) {
+                assertSQLParserRule((SQLParserRule) each);
             }
         }
     }
@@ -80,17 +90,31 @@ public abstract class AbstractSpringNamespaceTest extends AbstractJUnit4SpringCo
     
     private void assertReadwriteSplittingRule(final ReadwriteSplittingRule rule) {
         assertTrue(rule.findDataSourceRule("ds_0").isPresent());
-        assertThat(rule.findDataSourceRule("ds_0").get().getWriteDataSourceName(), is("ds_0_write"));
-        assertThat(rule.findDataSourceRule("ds_0").get().getReadDataSourceNames(), is(Arrays.asList("ds_0_read_0", "ds_0_read_1")));
+        Properties props = rule.findDataSourceRule("ds_0").get().getReadwriteSplittingType().getProps();
+        assertNotNull(props);
+        assertThat(props.getProperty("read-data-source-names"), is("ds_0_read_0, ds_0_read_1"));
         assertTrue(rule.findDataSourceRule("ds_1").isPresent());
-        assertThat(rule.findDataSourceRule("ds_1").get().getWriteDataSourceName(), is("ds_1_write"));
-        assertThat(rule.findDataSourceRule("ds_1").get().getReadDataSourceNames(), is(Arrays.asList("ds_1_read_0", "ds_1_read_1")));
+        props = rule.findDataSourceRule("ds_1").get().getReadwriteSplittingType().getProps();
+        assertNotNull(props);
+        assertThat(props.getProperty("read-data-source-names"), is("ds_1_read_0, ds_1_read_1"));
     }
     
     private void assertEncryptRule(final EncryptRule rule) {
         assertThat(rule.getCipherColumn("t_order", "pwd"), is("pwd_cipher"));
         assertTrue(rule.findEncryptor(DefaultSchema.LOGIC_NAME, "t_order", "pwd").isPresent());
         assertThat(rule.findEncryptor(DefaultSchema.LOGIC_NAME, "t_order", "pwd").get().getProps().getProperty("aes-key-value"), is("123456"));
+    }
+    
+    private void assertSQLParserRule(final SQLParserRule sqlParserRule) {
+        assertThat(sqlParserRule.isSqlCommentParseEnabled(), is(true));
+        assertCacheOption(sqlParserRule.getSqlStatementCache());
+        assertCacheOption(sqlParserRule.getParseTreeCache());
+    }
+    
+    private void assertCacheOption(final CacheOption cacheOption) {
+        assertThat(cacheOption.getInitialCapacity(), is(1024));
+        assertThat(cacheOption.getMaximumSize(), is(1024L));
+        assertThat(cacheOption.getConcurrencyLevel(), is(4));
     }
     
     @Test
