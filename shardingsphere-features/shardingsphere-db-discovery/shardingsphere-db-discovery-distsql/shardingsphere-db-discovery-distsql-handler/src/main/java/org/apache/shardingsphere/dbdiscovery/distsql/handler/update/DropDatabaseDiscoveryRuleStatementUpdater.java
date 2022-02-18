@@ -63,7 +63,7 @@ public final class DropDatabaseDiscoveryRuleStatementUpdater implements RuleDefi
     
     private void checkIsInUse(final String schemaName, final DropDatabaseDiscoveryRuleStatement sqlStatement, final ShardingSphereMetaData shardingSphereMetaData) throws DistSQLException {
         Collection<String> rulesInUse = shardingSphereMetaData.getRuleMetaData().findRules(ExportableRule.class).stream()
-                .filter(each -> each.containExportableKey(Collections.singleton(ExportableConstants.EXPORTABLE_KEY_AUTO_AWARE_DATA_SOURCE_NAME)))
+                .filter(each -> each.containExportableKey(Collections.singletonList(ExportableConstants.EXPORTABLE_KEY_AUTO_AWARE_DATA_SOURCE_NAME)))
                 .map(each -> each.export(ExportableConstants.EXPORTABLE_KEY_AUTO_AWARE_DATA_SOURCE_NAME)).filter(Optional::isPresent)
                 .map(each -> (Collection<String>) each.get()).flatMap(Collection::stream).collect(Collectors.toSet());
         Collection<String> invalid = sqlStatement.getRuleNames().stream().filter(rulesInUse::contains).collect(Collectors.toList());
@@ -92,6 +92,6 @@ public final class DropDatabaseDiscoveryRuleStatementUpdater implements RuleDefi
     
     @Override
     public String getType() {
-        return DropDatabaseDiscoveryRuleStatement.class.getCanonicalName();
+        return DropDatabaseDiscoveryRuleStatement.class.getName();
     }
 }

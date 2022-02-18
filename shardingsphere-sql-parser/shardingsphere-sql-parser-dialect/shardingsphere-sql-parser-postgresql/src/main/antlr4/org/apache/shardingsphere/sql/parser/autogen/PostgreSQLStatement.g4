@@ -60,6 +60,9 @@ execute
     | alterDomain
     | alterDefaultPrivileges
     | alterForeignDataWrapper
+    | alterForeignTable
+    | alterGroup
+    | alterMaterializedView
     | alterProcedure
     | alterServer
     | alterSequence
@@ -75,6 +78,8 @@ execute
     | createSchema
     | createType
     | createTextSearch
+    | declare
+    | discard
     | dropDatabase
     | dropFunction
     | dropProcedure

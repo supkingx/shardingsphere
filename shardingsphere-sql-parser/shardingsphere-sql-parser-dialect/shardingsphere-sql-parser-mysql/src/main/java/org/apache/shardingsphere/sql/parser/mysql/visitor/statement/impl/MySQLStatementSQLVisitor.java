@@ -113,13 +113,13 @@ import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.String_
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.SubqueryContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.SubstringFunctionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableAliasRefListContext;
-import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableFactorContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableIdentOptWildContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableListContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableNameContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableReferenceContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableReferencesContext;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TableStatementContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TemporalLiteralsContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.TrimFunctionContext;
 import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser.UnionClauseContext;
@@ -205,7 +205,6 @@ import org.apache.shardingsphere.sql.parser.sql.common.value.parametermarker.Par
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLDeleteStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLInsertStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLSelectStatement;
-import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLTableStatement;
 import org.apache.shardingsphere.sql.parser.sql.dialect.statement.mysql.dml.MySQLUpdateStatement;
 
 import java.util.Collection;
@@ -587,7 +586,9 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
             result.setOwner(new OwnerSegment(ctx.identifier(0).start.getStartIndex(), ctx.identifier(0).stop.getStopIndex(), (IdentifierValue) visit(ctx.identifier(0))));
         } else {
             result = new ColumnSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), (IdentifierValue) visit(ctx.identifier(2)));
-            result.setOwner(new OwnerSegment(ctx.identifier(1).start.getStartIndex(), ctx.identifier(1).stop.getStopIndex(), (IdentifierValue) visit(ctx.identifier(1))));
+            OwnerSegment owner = new OwnerSegment(ctx.identifier(1).start.getStartIndex(), ctx.identifier(1).stop.getStopIndex(), (IdentifierValue) visit(ctx.identifier(1)));
+            owner.setOwner(new OwnerSegment(ctx.identifier(0).start.getStartIndex(), ctx.identifier(0).stop.getStopIndex(), (IdentifierValue) visit(ctx.identifier(0))));
+            result.setOwner(owner);
         }
         return result;
     }
@@ -695,6 +696,13 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         if (null != ctx.windowClause()) {
             result.setWindow((WindowSegment) visit(ctx.windowClause()));
         }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitTableStatement(final TableStatementContext ctx) {
+        MySQLSelectStatement result = new MySQLSelectStatement();
+        result.setTable((SimpleTableSegment) visit(ctx.tableName()));
         return result;
     }
     
@@ -1328,11 +1336,7 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
     public ASTNode visitProjection(final ProjectionContext ctx) {
         // FIXME :The stop index of project is the stop index of projection, instead of alias.
         if (null != ctx.qualifiedShorthand()) {
-            QualifiedShorthandContext shorthand = ctx.qualifiedShorthand();
-            ShorthandProjectionSegment result = new ShorthandProjectionSegment(shorthand.getStart().getStartIndex(), shorthand.getStop().getStopIndex());
-            IdentifierValue identifier = new IdentifierValue(shorthand.identifier().getText());
-            result.setOwner(new OwnerSegment(shorthand.identifier().getStart().getStartIndex(), shorthand.identifier().getStop().getStopIndex(), identifier));
-            return result;
+            return createShorthandProjection(ctx.qualifiedShorthand());
         }
         AliasSegment alias = null == ctx.alias() ? null : (AliasSegment) visit(ctx.alias());
         ASTNode exprProjection = visit(ctx.expr());
@@ -1356,6 +1360,18 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
             return result;
         }
         return createProjection(ctx, alias, exprProjection);
+    }
+    
+    private ShorthandProjectionSegment createShorthandProjection(final QualifiedShorthandContext shorthand) {
+        ShorthandProjectionSegment result = new ShorthandProjectionSegment(shorthand.getStart().getStartIndex(), shorthand.getStop().getStopIndex());
+        IdentifierContext identifier = shorthand.identifier().get(shorthand.identifier().size() - 1);
+        OwnerSegment owner = new OwnerSegment(identifier.getStart().getStartIndex(), identifier.getStop().getStopIndex(), new IdentifierValue(identifier.getText()));
+        result.setOwner(owner);
+        if (shorthand.identifier().size() > 1) {
+            IdentifierContext schemaIdentifier = shorthand.identifier().get(0);
+            owner.setOwner(new OwnerSegment(schemaIdentifier.getStart().getStartIndex(), schemaIdentifier.getStop().getStopIndex(), new IdentifierValue(schemaIdentifier.getText())));
+        }
+        return result;
     }
     
     @Override
@@ -1586,15 +1602,6 @@ public abstract class MySQLStatementSQLVisitor extends MySQLStatementBaseVisitor
         return new ParameterMarkerLimitValueSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ((ParameterMarkerValue) visit(ctx.parameterMarker())).getValue());
     }
     
-    @Override
-    public ASTNode visitTable(final TableContext ctx) {
-        MySQLTableStatement result = new MySQLTableStatement();
-        result.setTable((SimpleTableSegment) visit(ctx.tableName()));
-        result.setColumn((ColumnSegment) visit(ctx.columnName()));
-        result.setLimit((LimitSegment) visit(ctx.limitClause()));
-        return result;
-    }
-
     @Override
     public ASTNode visitCollateClause(final CollateClauseContext ctx) {
         if (null != ctx.collationName()) {
