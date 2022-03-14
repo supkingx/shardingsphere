@@ -32,9 +32,9 @@ import org.apache.shardingsphere.infra.parser.sql.SQLStatementParserEngine;
 import org.apache.shardingsphere.infra.route.context.RouteContext;
 import org.apache.shardingsphere.infra.route.engine.SQLRouteEngine;
 import org.apache.shardingsphere.parser.rule.SQLParserRule;
-import org.apache.shardingsphere.singletable.rule.SingleTableRule;
 import org.apache.shardingsphere.sharding.route.engine.fixture.AbstractRoutingEngineTest;
 import org.apache.shardingsphere.sharding.rule.ShardingRule;
+import org.apache.shardingsphere.singletable.rule.SingleTableRule;
 
 import java.sql.Types;
 import java.util.Arrays;
@@ -79,7 +79,7 @@ public abstract class AbstractSQLRouteTest extends AbstractRoutingEngineTest {
                 new ColumnMetaData("status", Types.VARCHAR, false, false, false),
                 new ColumnMetaData("c_date", Types.TIMESTAMP, false, false, false)), Collections.emptySet()));
         tableMetaDataMap.put("t_other", new TableMetaData("t_other", Collections.singletonList(new ColumnMetaData("order_id", Types.INTEGER, true, false, false)), Collections.emptySet()));
-        tableMetaDataMap.put("t_category", new TableMetaData("t_category"));
+        tableMetaDataMap.put("t_category", new TableMetaData("t_category", Collections.emptyList(), Collections.emptyList()));
         return new ShardingSphereSchema(tableMetaDataMap);
     }
 }

@@ -18,7 +18,7 @@
 package org.apache.shardingsphere.proxy.backend.text.distsql.ral.common.updatable;
 
 import org.apache.shardingsphere.distsql.parser.segment.TrafficRuleSegment;
-import org.apache.shardingsphere.distsql.parser.statement.rdl.create.AlterTrafficRuleStatement;
+import org.apache.shardingsphere.distsql.parser.statement.ral.common.updatable.AlterTrafficRuleStatement;
 import org.apache.shardingsphere.infra.distsql.exception.DistSQLException;
 import org.apache.shardingsphere.infra.distsql.exception.rule.InvalidAlgorithmConfigurationException;
 import org.apache.shardingsphere.infra.distsql.exception.rule.RequiredRuleMissedException;
@@ -56,12 +56,12 @@ public final class AlterTrafficRuleHandler extends UpdatableRALBackendHandler<Al
     }
     
     private void check(final AlterTrafficRuleStatement sqlStatement, final Optional<TrafficRuleConfiguration> currentConfiguration) throws DistSQLException {
-        DistSQLException.predictionThrow(currentConfiguration.isPresent(), new RequiredRuleMissedException("Traffic"));
+        DistSQLException.predictionThrow(currentConfiguration.isPresent(), () -> new RequiredRuleMissedException("Traffic"));
         Collection<String> currentRuleNames = currentConfiguration.get().getTrafficStrategies().stream().map(TrafficStrategyConfiguration::getName).collect(Collectors.toSet());
         Set<String> notExistRuleNames = sqlStatement.getSegments().stream().map(TrafficRuleSegment::getName).filter(each -> !currentRuleNames.contains(each)).collect(Collectors.toSet());
-        DistSQLException.predictionThrow(notExistRuleNames.isEmpty(), new RequiredRuleMissedException("Traffic", notExistRuleNames));
+        DistSQLException.predictionThrow(notExistRuleNames.isEmpty(), () -> new RequiredRuleMissedException("Traffic", notExistRuleNames));
         Collection<String> invalidAlgorithmNames = getInvalidAlgorithmNames(sqlStatement.getSegments());
-        DistSQLException.predictionThrow(invalidAlgorithmNames.isEmpty(), new InvalidAlgorithmConfigurationException("traffic", invalidAlgorithmNames));
+        DistSQLException.predictionThrow(invalidAlgorithmNames.isEmpty(), () -> new InvalidAlgorithmConfigurationException("traffic", invalidAlgorithmNames));
     }
     
     private Collection<String> getInvalidAlgorithmNames(final Collection<TrafficRuleSegment> segments) {

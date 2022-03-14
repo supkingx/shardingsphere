@@ -19,47 +19,58 @@ package org.apache.shardingsphere.test.integration.framework.container.atomic.st
 
 import lombok.SneakyThrows;
 import org.apache.shardingsphere.infra.database.type.DatabaseTypeRegistry;
-import org.apache.shardingsphere.test.integration.env.EnvironmentPath;
+import org.apache.shardingsphere.test.integration.env.scenario.path.ScenarioDataPath;
+import org.apache.shardingsphere.test.integration.env.scenario.path.ScenarioDataPath.Type;
 import org.apache.shardingsphere.test.integration.framework.container.atomic.storage.EmbeddedStorageContainer;
 import org.h2.tools.RunScript;
 
 import javax.sql.DataSource;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map.Entry;
+import java.util.Optional;
 
 /**
  * H2 container.
  */
 public final class H2Container extends EmbeddedStorageContainer {
     
+    private final ScenarioDataPath scenarioDataPath;
+    
     public H2Container(final String scenario) {
         super(DatabaseTypeRegistry.getActualDatabaseType("H2"), scenario);
+        scenarioDataPath = new ScenarioDataPath(scenario);
     }
     
     @Override
     @SneakyThrows({IOException.class, SQLException.class})
     public void start() {
-        File initSQLFile = new File(EnvironmentPath.getInitSQLFile(getDatabaseType(), getScenario()));
+        fillActualDataSet();
+        fillExpectedDataSet();
+    }
+    
+    private void fillActualDataSet() throws SQLException, IOException {
         for (Entry<String, DataSource> entry : getActualDataSourceMap().entrySet()) {
-            String dbInitSQLFileName = "init-" + entry.getKey() + ".sql";
-            try (
-                    Connection connection = entry.getValue().getConnection();
-                    FileReader reader = new FileReader(initSQLFile)) {
-                RunScript.execute(connection, reader);
-                if (EnvironmentPath.checkSQLFileExist(getDatabaseType(), getScenario(), dbInitSQLFileName)) {
-                    executeDataInitFile(connection, dbInitSQLFileName);
-                }
+            executeInitSQL(entry.getValue(), scenarioDataPath.getInitSQLFile(Type.ACTUAL, getDatabaseType()));
+            Optional<String> dbInitSQLFile = scenarioDataPath.findActualDatabaseInitSQLFile(entry.getKey(), getDatabaseType());
+            if (dbInitSQLFile.isPresent()) {
+                executeInitSQL(entry.getValue(), dbInitSQLFile.get());
             }
         }
     }
     
-    private void executeDataInitFile(final Connection connection, final String dataInitFileName) throws IOException, SQLException {
-        File dataInitFile = new File(EnvironmentPath.getInitSQLFile(getDatabaseType(), getScenario(), dataInitFileName));
-        try (FileReader reader = new FileReader(dataInitFile)) {
+    private void fillExpectedDataSet() throws SQLException, IOException {
+        for (Entry<String, DataSource> entry : getExpectedDataSourceMap().entrySet()) {
+            executeInitSQL(entry.getValue(), scenarioDataPath.getInitSQLFile(Type.EXPECTED, getDatabaseType()));
+        }
+    }
+    
+    private void executeInitSQL(final DataSource dataSource, final String initSQLFile) throws SQLException, IOException {
+        try (
+                Connection connection = dataSource.getConnection();
+                FileReader reader = new FileReader(initSQLFile)) {
             RunScript.execute(connection, reader);
         }
     }

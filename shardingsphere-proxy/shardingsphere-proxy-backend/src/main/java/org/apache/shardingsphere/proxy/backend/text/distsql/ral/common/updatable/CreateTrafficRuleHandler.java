@@ -18,7 +18,7 @@
 package org.apache.shardingsphere.proxy.backend.text.distsql.ral.common.updatable;
 
 import org.apache.shardingsphere.distsql.parser.segment.TrafficRuleSegment;
-import org.apache.shardingsphere.distsql.parser.statement.rdl.create.CreateTrafficRuleStatement;
+import org.apache.shardingsphere.distsql.parser.statement.ral.common.updatable.CreateTrafficRuleStatement;
 import org.apache.shardingsphere.infra.config.RuleConfiguration;
 import org.apache.shardingsphere.infra.distsql.exception.DistSQLException;
 import org.apache.shardingsphere.infra.distsql.exception.rule.DuplicateRuleException;
@@ -60,10 +60,10 @@ public final class CreateTrafficRuleHandler extends UpdatableRALBackendHandler<C
         if (trafficRuleConfiguration.isPresent()) {
             Collection<String> currentRuleNames = trafficRuleConfiguration.get().getTrafficStrategies().stream().map(TrafficStrategyConfiguration::getName).collect(Collectors.toSet());
             Set<String> duplicatedRuleNames = sqlStatement.getSegments().stream().map(TrafficRuleSegment::getName).filter(currentRuleNames::contains).collect(Collectors.toSet());
-            DistSQLException.predictionThrow(duplicatedRuleNames.isEmpty(), new DuplicateRuleException("traffic", duplicatedRuleNames));
+            DistSQLException.predictionThrow(duplicatedRuleNames.isEmpty(), () -> new DuplicateRuleException("traffic", duplicatedRuleNames));
         }
         Collection<String> invalidAlgorithmNames = getInvalidAlgorithmNames(sqlStatement.getSegments());
-        DistSQLException.predictionThrow(invalidAlgorithmNames.isEmpty(), new InvalidAlgorithmConfigurationException("traffic", invalidAlgorithmNames));
+        DistSQLException.predictionThrow(invalidAlgorithmNames.isEmpty(), () -> new InvalidAlgorithmConfigurationException("traffic", invalidAlgorithmNames));
     }
     
     private Collection<String> getInvalidAlgorithmNames(final Collection<TrafficRuleSegment> segments) {
